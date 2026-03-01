@@ -1,0 +1,51 @@
+[package]
+name = "recallable"
+description.workspace = true
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+categories.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+documentation.workspace = true
+readme.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+recallable-macro = { version = "0.1.0", path = "../recallable-macro" }
+
+[features]
+default = ["serde"]
+full = ["serde", "impl_from"]
+serde = ["recallable-macro/serde"]
+impl_from = ["recallable-macro/impl_from"]
+
+[dev-dependencies]
+anyhow = "1.0.100"
+serde = { version = "1.0.228", default-features = false, features = ["derive"] }
+serde_json = { version = "1.0.149", default-features = false, features = [
+    "alloc",
+] }
+postcard = { version = "1.1.3", default-features = false, features = [
+    "heapless",
+] }
+heapless = { version = "0.7.17", default-features = false }
+trybuild = "1.0.114"
+
+[[test]]
+name = "basic"
+
+[[test]]
+name = "postcard"
+required-features = ["serde"]
+
+[[test]]
+name = "serde_json"
+required-features = ["serde"]
+
+[[test]]
+name = "impl_from"
+required-features = ["impl_from"]

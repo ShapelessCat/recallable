@@ -1,0 +1,5 @@
+error: unrecognized `recallable` parameter
+ --> tests/ui/derive_fail_recallable_skip_with_unknown_parameter.rs:5:24
+  |
+5 |     #[recallable(skip, unknown)]
+  |                        ^^^^^^^

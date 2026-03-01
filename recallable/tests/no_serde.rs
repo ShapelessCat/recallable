@@ -1,0 +1,84 @@
+use recallable::recallable_model;
+
+const fn plus_one(x: i32) -> i32 {
+    x + 1
+}
+
+#[recallable_model]
+#[derive(Clone, Debug, PartialEq)]
+struct PlainInner {
+    value: i32,
+}
+
+#[recallable_model]
+#[derive(Clone, Debug, PartialEq)]
+struct PlainOuter<T> {
+    #[recallable]
+    inner: T,
+    version: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+struct DeriveOnlyStruct {
+    value: i32,
+    #[recallable(skip)]
+    sticky: u32,
+}
+
+#[recallable_model]
+#[derive(Clone, Debug)]
+struct AllSkipped {
+    #[recallable(skip)]
+    marker: fn(i32) -> i32,
+}
+
+#[recallable_model]
+#[derive(Clone, Debug, PartialEq)]
+struct FieldWithNonRecallableAttrBeforeSkip {
+    value: i32,
+    #[allow(dead_code)]
+    #[recallable(skip)]
+    sticky: u32,
+}
+
+#[test]
+fn test_recallable_model_and_derive_generate_recall_types_without_serde() {
+    fn assert_recallable<T: recallable::Recallable + recallable::Recall>() {}
+
+    assert_recallable::<PlainInner>();
+    assert_recallable::<PlainOuter<PlainInner>>();
+    assert_recallable::<DeriveOnlyStruct>();
+    assert_recallable::<AllSkipped>();
+}
+
+#[test]
+fn test_recall_methods_are_generated_without_serde() {
+    let _: fn(
+        &mut PlainOuter<PlainInner>,
+        <PlainOuter<PlainInner> as recallable::Recallable>::Memento,
+    ) = <PlainOuter<PlainInner> as recallable::Recall>::recall;
+
+    let _: fn(&mut DeriveOnlyStruct, <DeriveOnlyStruct as recallable::Recallable>::Memento) =
+        <DeriveOnlyStruct as recallable::Recall>::recall;
+
+    let _: fn(&mut AllSkipped, <AllSkipped as recallable::Recallable>::Memento) =
+        <AllSkipped as recallable::Recall>::recall;
+
+    let outer_memento_name =
+        std::any::type_name::<<PlainOuter<PlainInner> as recallable::Recallable>::Memento>();
+    let derive_memento_name =
+        std::any::type_name::<<DeriveOnlyStruct as recallable::Recallable>::Memento>();
+    assert!(outer_memento_name.contains("PlainOuter"));
+    assert!(derive_memento_name.contains("DeriveOnlyStruct"));
+
+    let value = AllSkipped { marker: plus_one };
+    assert_eq!((value.marker)(1), 2);
+}
+
+#[test]
+fn test_recallable_skip_works_with_non_recallable_field_attribute() {
+    let _: fn(
+        &mut FieldWithNonRecallableAttrBeforeSkip,
+        <FieldWithNonRecallableAttrBeforeSkip as recallable::Recallable>::Memento,
+    ) = <FieldWithNonRecallableAttrBeforeSkip as recallable::Recall>::recall;
+}

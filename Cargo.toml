@@ -1,0 +1,27 @@
+[workspace]
+members = ["recallable", "recallable-macro"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+rust-version = "1.85"
+edition = "2024"
+repository = "https://github.com/ShapelessCat/recallable"
+homepage = "https://github.com/ShapelessCat/recallable"
+documentation = "https://docs.rs/recallable"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+description = "Traits (`Recallable`, `Recall`, `TryRecall`) and macros for defining Memento pattern types and their state restoration behaviors."
+categories = ["data-structures", "rust-patterns"]
+keywords = ["memento-pattern", "derive", "macro", "serde"]
+
+[profile.release]
+debug = false
+strip = true
+lto = "fat"
+
+[profile.cpu-profiling]
+inherits = "release"
+debug = true
+strip = false
+lto = "fat"

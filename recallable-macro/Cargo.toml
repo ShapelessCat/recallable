@@ -1,0 +1,24 @@
+[package]
+name = "recallable-macro"
+description = "Macro suite for the recallable crate: enables model with #[recallable_model] and automatic trait derives for `Recallable` and `Recall`."
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+categories.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+documentation.workspace = true
+readme.workspace = true
+
+[lib]
+proc-macro = true
+
+[features]
+serde = []
+impl_from = []
+
+[dependencies]
+proc-macro2 = "1.0.105"
+quote = "1.0.43"
+syn = { version = "2.0.114", features = ["full", "visit", "extra-traits"] }

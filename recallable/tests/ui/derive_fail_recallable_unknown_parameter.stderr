@@ -1,0 +1,5 @@
+error: unrecognized `recallable` parameter
+ --> tests/ui/derive_fail_recallable_unknown_parameter.rs:5:18
+  |
+5 |     #[recallable(unknown)]
+  |                  ^^^^^^^
