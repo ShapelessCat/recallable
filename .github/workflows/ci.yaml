@@ -30,6 +30,9 @@ jobs:
       - name: Run clippy
         run: cargo clippy --verbose
 
+      - name: Run clippy with all features
+        run: cargo clippy --all-features --verbose
+
       - name: Run tests with default features (support serde)
         run: cargo test --verbose --package recallable
 
@@ -38,6 +41,9 @@ jobs:
 
       - name: cargo test with feature impl_from
         run: cargo test --verbose --package recallable --features impl_from
+
+      - name: Run tests with all features
+        run: cargo test --verbose --package recallable --all-features
 
   coverage-report:
     runs-on: ubuntu-latest
@@ -61,6 +67,7 @@ jobs:
           cargo llvm-cov --workspace --no-default-features --tests --no-report
           cargo llvm-cov --workspace --tests --no-report
           cargo llvm-cov --workspace --features impl_from --tests --no-report
+          cargo llvm-cov --workspace --all-features --tests --no-report
 
       - name: Generate HTML and JSON reports
         run: |
@@ -173,6 +180,7 @@ jobs:
           cargo llvm-cov --workspace --no-default-features --tests --no-report
           cargo llvm-cov --workspace --tests --no-report
           cargo llvm-cov --workspace --features impl_from --tests --no-report
+          cargo llvm-cov --workspace --all-features --tests --no-report
           mkdir -p target/llvm-cov
           cargo llvm-cov report --json --summary-only --output-path target/llvm-cov/base-summary.json
 
