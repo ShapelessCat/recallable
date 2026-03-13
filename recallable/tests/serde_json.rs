@@ -28,6 +28,34 @@ fn test_scoped_peek() -> anyhow::Result<()> {
 }
 
 #[test]
+fn test_scoped_measurement_memento_value_equality() {
+    let measurement: FakeMeasurement<i32, fn(&i32) -> i32> = FakeMeasurement {
+        v: 42,
+        how: identity,
+    };
+    let original = ScopedMeasurement {
+        current_control_level: 33u32,
+        inner: measurement.clone(),
+        current_base: MeasurementResult(20i32),
+    };
+
+    let json = serde_json::to_string(&original).unwrap();
+    let memento: <ScopedMeasurement<u32, FakeMeasurement<i32, fn(&i32) -> i32>, i32> as Recallable>::Memento =
+        serde_json::from_str(&json).unwrap();
+
+    let mut target = ScopedMeasurement {
+        current_control_level: 0u32,
+        inner: measurement,
+        current_base: MeasurementResult(0i32),
+    };
+    target.recall(memento);
+
+    assert_eq!(target.current_control_level, 33);
+    assert_eq!(target.inner.v, 42);
+    assert_eq!(target.current_base, MeasurementResult(20));
+}
+
+#[test]
 fn test_try_recall_blanket_impl() {
     let mut s = SimpleStruct { val: 10 };
     // The derived memento struct is compatible with serde.
