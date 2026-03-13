@@ -85,6 +85,14 @@ fn test_memento_types_implement_debug() {
 }
 
 #[test]
+fn test_memento_types_implement_clone_and_partial_eq() {
+    fn assert_clone_eq<T: Clone + PartialEq>() {}
+    assert_clone_eq::<<PlainInner as recallable::Recallable>::Memento>();
+    assert_clone_eq::<<PlainOuter<PlainInner> as recallable::Recallable>::Memento>();
+    assert_clone_eq::<<DeriveOnlyStruct as recallable::Recallable>::Memento>();
+}
+
+#[test]
 fn test_recallable_skip_works_with_non_recallable_field_attribute() {
     let _: fn(
         &mut FieldWithNonRecallableAttrBeforeSkip,
