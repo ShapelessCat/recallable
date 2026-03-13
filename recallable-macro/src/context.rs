@@ -141,19 +141,16 @@ impl<'a> MacroContext<'a> {
                     let type_name = Self::extract_recallable_type_name(field_type)?;
                     // `Recallable` usage overrides `NotRecallable` usage.
                     preserved_types.insert(type_name, TypeUsage::Recallable);
-                    field_actions.push(FieldAction::Recall {
-                        member,
-                        ty: field_type,
-                    });
                 }
                 FieldBehavior::Keep => {
                     Self::record_non_recallable_type_usage(field_type, preserved_types);
-                    field_actions.push(FieldAction::Keep {
-                        member,
-                        ty: field_type,
-                    });
                 }
             }
+            field_actions.push(FieldAction {
+                member,
+                ty: field_type,
+                behavior: field_behavior,
+            });
         }
         Ok(())
     }
@@ -262,22 +259,17 @@ impl<'a> ToTokens for FieldMember<'a> {
 }
 
 #[derive(Debug)]
-enum FieldAction<'a> {
-    Keep {
-        member: FieldMember<'a>,
-        ty: &'a Type,
-    },
-    Recall {
-        member: FieldMember<'a>,
-        ty: &'a Type,
-    },
+struct FieldAction<'a> {
+    member: FieldMember<'a>,
+    ty: &'a Type,
+    behavior: FieldBehavior,
 }
 
 impl<'a> FieldAction<'a> {
     fn build_field(&self) -> TokenStream2 {
-        let member = self.member();
-        let ty = self.ty();
-        let field_ty = if self.is_memento() {
+        let member = &self.member;
+        let ty = self.ty;
+        let field_ty = if self.behavior == FieldBehavior::Recall {
             quote! { #ty::Memento }
         } else {
             quote! { #ty }
@@ -293,39 +285,23 @@ impl<'a> FieldAction<'a> {
         recall_trait: &TokenStream2,
         recall_index: usize,
     ) -> TokenStream2 {
-        let member = self.member();
+        let member = &self.member;
         let recall_member = member.recall_member(recall_index);
-        match self {
-            FieldAction::Keep { .. } => {
+        match self.behavior {
+            FieldBehavior::Keep => {
                 quote! { self.#member = memento.#recall_member; }
             }
-            FieldAction::Recall { .. } => {
+            FieldBehavior::Recall => {
                 quote! { #recall_trait::recall(&mut self.#member, memento.#recall_member); }
             }
         }
     }
 
-    const fn member(&self) -> &FieldMember<'a> {
-        match self {
-            FieldAction::Keep { member, .. } | FieldAction::Recall { member, .. } => member,
-        }
-    }
-
-    const fn ty(&self) -> &'a Type {
-        match self {
-            FieldAction::Keep { ty, .. } | FieldAction::Recall { ty, .. } => ty,
-        }
-    }
-
-    const fn is_memento(&self) -> bool {
-        matches!(self, FieldAction::Recall { .. })
-    }
-
     fn build_initializer_expr(&self) -> TokenStream2 {
-        let member = self.member();
-        match self {
-            FieldAction::Keep { .. } => quote! { value.#member },
-            FieldAction::Recall { .. } => quote! { ::core::convert::From::from(value.#member) },
+        let member = &self.member;
+        match self.behavior {
+            FieldBehavior::Keep => quote! { value.#member },
+            FieldBehavior::Recall => quote! { ::core::convert::From::from(value.#member) },
         }
     }
 }
