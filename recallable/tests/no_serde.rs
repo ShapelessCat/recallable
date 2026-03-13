@@ -76,6 +76,15 @@ fn test_recall_methods_are_generated_without_serde() {
 }
 
 #[test]
+fn test_memento_types_implement_debug() {
+    fn assert_debug<T: core::fmt::Debug>() {}
+    assert_debug::<<PlainInner as recallable::Recallable>::Memento>();
+    assert_debug::<<PlainOuter<PlainInner> as recallable::Recallable>::Memento>();
+    assert_debug::<<DeriveOnlyStruct as recallable::Recallable>::Memento>();
+    assert_debug::<<AllSkipped as recallable::Recallable>::Memento>();
+}
+
+#[test]
 fn test_recallable_skip_works_with_non_recallable_field_attribute() {
     let _: fn(
         &mut FieldWithNonRecallableAttrBeforeSkip,
