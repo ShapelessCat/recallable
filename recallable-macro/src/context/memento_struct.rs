@@ -6,14 +6,18 @@ use crate::{IS_SERDE_ENABLED, context::MacroContext};
 
 impl<'a> MacroContext<'a> {
     // ============================================================
-    // #[derive(::serde::Deserialize)]
+    // #[derive(Debug, ::serde::Deserialize)]
     // struct InputTypeMemento<T, ...> ...
     // ============================================================
 
     pub(crate) fn build_memento_struct(&self) -> TokenStream2 {
-        let derive_attr = IS_SERDE_ENABLED.then_some(quote! { #[derive(::serde::Deserialize)] });
-        let memento_struct_type = &self.memento_struct_type;
+        let derives = if IS_SERDE_ENABLED {
+            quote! { #[derive(::core::fmt::Debug, ::serde::Deserialize)] }
+        } else {
+            quote! { #[derive(::core::fmt::Debug)] }
+        };
 
+        let memento_struct_type = &self.memento_struct_type;
         let bounded_types = self.build_trait_bounds(&self.recallable_trait);
         let where_clause = if bounded_types.is_empty() {
             quote! {}
@@ -26,9 +30,8 @@ impl<'a> MacroContext<'a> {
             Fields::Unnamed(_) => quote! { ( #(#recall_fields),* ) #where_clause; },
             Fields::Unit => quote! {;},
         };
-
         quote! {
-            #derive_attr
+            #derives
             pub struct #memento_struct_type #body
         }
     }
