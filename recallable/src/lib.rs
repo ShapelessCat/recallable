@@ -178,6 +178,7 @@ pub trait TryRecall: Recallable {
     /// # Errors
     ///
     /// Returns an error if the memento is invalid or cannot be applied.
+    #[must_use = "this returns a Result that may contain an error, which should be handled"]
     fn try_recall(&mut self, memento: Self::Memento) -> Result<(), Self::Error>;
 }
 
