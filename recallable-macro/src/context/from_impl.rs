@@ -33,7 +33,7 @@ impl<'a> MacroContext<'a> {
         match &self.fields {
             Fields::Named(_) => {
                 let field_initializers = self.field_actions.iter().map(|action| {
-                    let member = action.member();
+                    let member = &action.member;
                     let value = action.build_initializer_expr();
                     quote! { #member: #value }
                 });
