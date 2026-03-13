@@ -111,7 +111,7 @@ pub fn derive_recallable(input: TokenStream) -> TokenStream {
 /// - assigns fields directly by default,
 /// - recursively calls `recall` on fields marked with `#[recallable]`,
 /// - respects `#[recallable(skip)]` by omitting those fields from recalling.
-pub fn derive_memento(input: TokenStream) -> TokenStream {
+pub fn derive_recall(input: TokenStream) -> TokenStream {
     expand(input, |ctx| {
         let recall_trait_impl = ctx.build_recall_trait_impl();
 
