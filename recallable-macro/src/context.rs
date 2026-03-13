@@ -35,7 +35,7 @@ enum TypeUsage {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FieldBehavior {
+pub(crate) enum FieldBehavior {
     Keep,
     Recall,
 }
@@ -158,7 +158,7 @@ impl<'a> MacroContext<'a> {
         Ok(())
     }
 
-    fn determine_field_behavior(field: &Field) -> syn::Result<Option<FieldBehavior>> {
+    pub(crate) fn determine_field_behavior(field: &Field) -> syn::Result<Option<FieldBehavior>> {
         let mut saw_recallable_attr = false;
         let mut saw_skip = false;
 
@@ -183,13 +183,11 @@ impl<'a> MacroContext<'a> {
             }
         }
 
-        Ok(if saw_skip {
-            None
-        } else if saw_recallable_attr {
-            Some(FieldBehavior::Recall)
+        Ok((!saw_skip).then_some(if saw_recallable_attr {
+            FieldBehavior::Recall
         } else {
-            Some(FieldBehavior::Keep)
-        })
+            FieldBehavior::Keep
+        }))
     }
 
     fn field_member(field: &'a Field, index: usize) -> FieldMember<'a> {
@@ -355,19 +353,10 @@ fn is_recallable_attr(attr: &Attribute) -> bool {
 }
 
 pub fn has_recallable_skip_attr(field: &Field) -> bool {
-    field.attrs.iter().any(|attr| {
-        if !is_recallable_attr(attr) {
-            return false;
-        }
-        let mut has_skip = false;
-        let _ = attr.parse_nested_meta(|meta| {
-            if meta.path.is_ident("skip") {
-                has_skip = true;
-            }
-            Ok(())
-        });
-        has_skip
-    })
+    // Use determine_field_behavior for consistent validation.
+    // In the attribute macro context, we intentionally ignore errors here
+    // because the derive macros will report them with proper spans.
+    matches!(MacroContext::determine_field_behavior(field), Ok(None))
 }
 
 struct SimpleTypeCollector<'a> {
@@ -398,11 +387,7 @@ fn get_abstract_simple_type_name(t: &Type) -> Option<&Ident> {
         Type::Path(tp) if !tp.path.segments.is_empty() => {
             let last_segment = tp.path.segments.last()?;
             // Ensure the path segment has no arguments (e.g., it's not `Vec<T>` or `Option<T>`).
-            if matches!(last_segment.arguments, PathArguments::None) {
-                Some(&last_segment.ident)
-            } else {
-                None
-            }
+            matches!(last_segment.arguments, PathArguments::None).then_some(&last_segment.ident)
         }
         _ => None,
     }
