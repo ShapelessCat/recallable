@@ -15,7 +15,8 @@ mod utils;
 
 use std::collections::HashMap;
 
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro_crate::{FoundCrate, crate_name};
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{ToTokens, quote};
 use syn::visit::Visit;
 use syn::{
@@ -331,9 +332,21 @@ impl<'a> FieldAction<'a> {
     }
 }
 
+/// Returns the path used to reference the `recallable` crate in generated code.
+///
+/// Uses `proc-macro-crate` to resolve the actual dependency name from `Cargo.toml`,
+/// which handles crate renames (e.g., `my_recallable = { package = "recallable", ... }`).
+/// Falls back to `::recallable` if the lookup fails.
 #[inline]
 pub(super) fn crate_path() -> TokenStream2 {
-    quote! { ::recallable }
+    match crate_name("recallable") {
+        Ok(FoundCrate::Itself) => quote! { crate },
+        Ok(FoundCrate::Name(name)) => {
+            let ident = Ident::new(&name, Span::call_site());
+            quote! { ::#ident }
+        }
+        Err(_) => quote! { ::recallable },
+    }
 }
 
 #[inline]
