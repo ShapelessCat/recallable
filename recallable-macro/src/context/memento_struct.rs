@@ -5,16 +5,16 @@ use syn::Fields;
 use crate::{IS_SERDE_ENABLED, context::MacroContext};
 
 impl<'a> MacroContext<'a> {
-    // ============================================================
-    // #[derive(Debug, ::serde::Deserialize)]
+    // =================================================================================================
+    // #[derive(::core::clone::Clone, ::core::fmt::Debug, ::core::cmp::PartialEq, ::serde::Deserialize)]
     // struct InputTypeMemento<T, ...> ...
-    // ============================================================
+    // =================================================================================================
 
     pub(crate) fn build_memento_struct(&self) -> TokenStream2 {
         let derives = if IS_SERDE_ENABLED {
-            quote! { #[derive(::core::fmt::Debug, ::serde::Deserialize)] }
+            quote! { #[derive(::core::clone::Clone, ::core::fmt::Debug, ::core::cmp::PartialEq, ::serde::Deserialize)] }
         } else {
-            quote! { #[derive(::core::fmt::Debug)] }
+            quote! { #[derive(::core::clone::Clone, ::core::fmt::Debug, ::core::cmp::PartialEq)] }
         };
 
         let memento_struct_type = &self.memento_struct_type;
