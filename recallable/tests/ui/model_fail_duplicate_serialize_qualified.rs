@@ -1,7 +1,7 @@
 use recallable::recallable_model;
 
-#[derive(serde::Serialize)]
 #[recallable_model]
+#[derive(serde::Serialize)]
 struct Foo {
     value: i32,
 }
