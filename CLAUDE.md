@@ -49,6 +49,8 @@ CI runs the test matrix on stable and validates the MSRV on Rust 1.85.0. Coverag
 - `#[recallable]` fields use `<FieldType as Recallable>::Memento` in the memento struct
 - `#[recallable(skip)]` fields excluded from memento; with serde feature, also get `#[serde(skip)]`
 - Memento types derive `Deserialize` but not `Serialize` (by design)
+- `#[recallable_model]` auto-derives `serde::Serialize` on the struct when the serde feature is
+  enabled — adding a manual `#[derive(Serialize)]` is a compile error
 
 ### Cargo features
 
@@ -65,6 +67,26 @@ CI runs the test matrix on stable and validates the MSRV on Rust 1.85.0. Coverag
 ## Testing
 
 Tests live in `recallable/tests/`. Compile-fail UI tests use `trybuild` in `tests/ui/`. Dev dependencies include `serde_json`, `postcard` + `heapless` (binary serialization), and `anyhow`.
+
+### Attribute macro ordering in UI tests
+
+`#[recallable_model]` must appear **before** any attributes it needs to inspect. An attribute macro's `item` token stream only contains attributes that follow it in source order.
+
+```rust
+// Correct — recallable_model sees #[derive(Serialize)] in input.attrs
+#[recallable_model]
+#[derive(Serialize)]
+struct Foo { ... }
+
+// Wrong — #[derive(Serialize)] is NOT visible to recallable_model
+#[derive(Serialize)]
+#[recallable_model]
+struct Foo { ... }
+```
+
+### trybuild feature flags
+
+`IS_SERDE_ENABLED` is a feature on `recallable-macro`, not `recallable`. trybuild compiles test files with `recallable` at `default-features = false`, but `recallable-macro` uses its own defaults (serde enabled). Wrap serde-specific `compile_fail` entries in `#[cfg(feature = "serde")]` so they only run when the test binary is compiled with serde.
 
 ## Code Style
 
