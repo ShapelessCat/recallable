@@ -44,6 +44,14 @@ const IS_IMPL_FROM_ENABLED: bool = cfg!(feature = "impl_from");
 /// This macro preserves the original struct shape and only mutates attributes.
 pub fn recallable_model(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let crate_path = crate_path();
+    let mut input = parse_macro_input!(item as ItemStruct);
+
+    if IS_SERDE_ENABLED {
+        if let Err(e) = check_no_serialize_derive(&input.attrs) {
+            return e.to_compile_error().into();
+        }
+    }
+
     let derives = if IS_SERDE_ENABLED {
         parse_quote! {
             #[derive(#crate_path::Recallable, #crate_path::Recall, ::serde::Serialize)]
@@ -54,7 +62,6 @@ pub fn recallable_model(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    let mut input = parse_macro_input!(item as ItemStruct);
     input.attrs.push(derives);
 
     if IS_SERDE_ENABLED {
@@ -144,4 +151,33 @@ fn add_serde_skip_attrs(fields: &mut Fields) {
             field.attrs.push(parse_quote! { #[serde(skip)] });
         }
     }
+}
+
+/// Returns an error if any existing `#[derive(...)]` attribute on the struct
+/// already includes a path whose last segment is `Serialize`.
+///
+/// Called only when `IS_SERDE_ENABLED` is true, before `#[recallable_model]`
+/// injects its own `::serde::Serialize` derive.
+fn check_no_serialize_derive(attrs: &[syn::Attribute]) -> syn::Result<()> {
+    for attr in attrs {
+        if !attr.path().is_ident("derive") {
+            continue;
+        }
+        attr.parse_nested_meta(|meta| {
+            if meta
+                .path
+                .segments
+                .last()
+                .map(|s| s.ident == "Serialize")
+                .unwrap_or(false)
+            {
+                return Err(meta.error(
+                    "`#[recallable_model]` already derives `serde::Serialize` when the \
+                     `serde` feature is enabled — remove the manual `#[derive(Serialize)]`",
+                ));
+            }
+            Ok(())
+        })?;
+    }
+    Ok(())
 }
