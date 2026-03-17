@@ -3,8 +3,8 @@
 [![CI](https://github.com/ShapelessCat/recallable/actions/workflows/ci.yaml/badge.svg)](https://github.com/ShapelessCat/recallable/actions/workflows/ci.yaml)
 [![Crates.io](https://img.shields.io/crates/v/recallable.svg)](https://crates.io/crates/recallable)
 [![Documentation](https://docs.rs/recallable/badge.svg)](https://docs.rs/recallable)
-[![recallable MSRV](https://img.shields.io/crates/msrv/recallable.svg?label=recallable%20msrv&color=lightgray)](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html)
-[![recallable-macro MSRV](https://img.shields.io/crates/msrv/recallable-macro.svg?label=recallable-macro%20msrv&color=lightgray)](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html)
+[![recallable MSRV](https://img.shields.io/crates/msrv/recallable.svg?label=recallable%20msrv&color=lightgray)](https://blog.rust-lang.org/2025/06/26/Rust-1.88.0.html)
+[![recallable-macro MSRV](https://img.shields.io/crates/msrv/recallable-macro.svg?label=recallable-macro%20msrv&color=lightgray)](https://blog.rust-lang.org/2025/06/26/Rust-1.88.0.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -65,7 +65,7 @@ The provided procedural macros handle the heavy lifting; they generate companion
 
 ## Installation
 
-**MSRV:** Rust 1.85 (edition 2024). CI validates both the current stable toolchain and Rust 1.85.0.
+**MSRV:** Rust 1.88 (edition 2024). CI validates both the current stable toolchain and Rust 1.88.0.
 
 Add this to your `Cargo.toml`:
 

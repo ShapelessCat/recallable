@@ -376,10 +376,10 @@ struct SimpleTypeCollector<'a> {
 
 impl<'ast> Visit<'ast> for SimpleTypeCollector<'ast> {
     fn visit_type_path(&mut self, node: &'ast syn::TypePath) {
-        if node.qself.is_none() {
-            if let Some(segment) = node.path.segments.first() {
-                self.used_simple_types.push(&segment.ident);
-            }
+        if node.qself.is_none()
+            && let Some(segment) = node.path.segments.first()
+        {
+            self.used_simple_types.push(&segment.ident);
         }
         syn::visit::visit_type_path(self, node);
     }

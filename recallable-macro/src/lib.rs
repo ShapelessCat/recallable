@@ -46,10 +46,8 @@ pub fn recallable_model(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let crate_path = crate_path();
     let mut input = parse_macro_input!(item as ItemStruct);
 
-    if IS_SERDE_ENABLED {
-        if let Err(e) = check_no_serialize_derive(&input.attrs) {
-            return e.to_compile_error().into();
-        }
+    if IS_SERDE_ENABLED && let Err(e) = check_no_serialize_derive(&input.attrs) {
+        return e.to_compile_error().into();
     }
 
     let derives = if IS_SERDE_ENABLED {
