@@ -36,8 +36,11 @@ pub use recallable_macro::{Recall, Recallable, recallable_model};
 /// }
 ///
 /// //vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-/// // If we derive `Recallable` and `Recall` for `Accumulator`, the following `AccumulatorMemento`
+/// // If we derive `Recallable` and `Recall` for `Accumulator`, the equivalent companion memento
 /// // type and the `Recallable`/`Recall` implementations can be generated automatically.
+/// // The generated companion type is exposed as
+/// // `<Accumulator<T> as Recallable>::Memento`; its concrete struct name is an implementation
+/// // detail of the derive.
 /// //
 /// // When deriving `Recallable`, a `From<Accumulator>` implementation is generated if the
 /// // `impl_from` feature is enabled. For derived implementations, mark non-state fields with
@@ -79,7 +82,8 @@ pub use recallable_macro::{Recall, Recallable, recallable_model};
 ///     };
 ///
 ///     let state_bytes = postcard::to_vec::<_, 128>(&accumulator).unwrap();
-///     let accumulator_memento: AccumulatorMemento<i32> = postcard::from_bytes(&state_bytes).unwrap();
+///     let accumulator_memento: <Accumulator<i32> as Recallable>::Memento =
+///         postcard::from_bytes(&state_bytes).unwrap();
 ///
 ///     let mut recovered_accumulator = Accumulator {
 ///         prev_control_signal: -1,

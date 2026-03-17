@@ -8,9 +8,9 @@
 //!   Cargo feature enabled for this macro crate it also adds `serde::Serialize`
 //!   and applies `#[serde(skip)]` to fields marked `#[recallable(skip)]`.
 //!
-//! - `#[derive(Recallable)]`: generates the companion `<Struct>Memento` type and the
-//!   `Recallable` impl; with the `impl_from` Cargo feature it also generates
-//!   `From<Struct>` for the memento type.
+//! - `#[derive(Recallable)]`: generates an internal companion memento struct, exposes
+//!   it as `<Struct as Recallable>::Memento`, and emits the `Recallable` impl; with the
+//!   `impl_from` Cargo feature it also generates `From<Struct>` for the memento type.
 //!
 //! - `#[derive(Recall)]`: generates the `Recall` implementation and recursively
 //!   recalles fields annotated with `#[recallable]`.
@@ -73,8 +73,11 @@ pub fn recallable_model(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - also derives `serde::Deserialize` when the `serde` feature is enabled for the
 ///   macro crate.
 ///
-/// The `Recallable` impl sets `type Memento = <StructName>Memento<...>` and adds
-/// any required generic bounds.
+/// The companion struct itself is generated as an internal implementation detail. The supported
+/// way to name it is `<Struct as Recallable>::Memento`.
+///
+/// The `Recallable` impl sets `type Memento` to that generated type and adds any required generic
+/// bounds.
 ///
 /// When the `impl_from` feature is enabled for the macro crate, a
 /// `From<Struct>` implementation is also generated for the memento type.
