@@ -56,7 +56,7 @@ pub(crate) struct MacroContext<'a> {
     /// This determines whether a field is copied directly (`Keep`) or recursively recalled
     /// (`Recall`).
     field_actions: Vec<FieldAction<'a>>,
-    /// The generated companion memento struct type (e.g., `MyStructMemento<T, ...>`).
+    /// The internal generated companion memento struct type (e.g., `MyStructMemento<T, ...>`).
     memento_struct_type: TokenStream2,
     /// Fully qualified path to the `Recallable` trait.
     recallable_trait: TokenStream2,
