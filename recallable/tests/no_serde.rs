@@ -1,4 +1,21 @@
+use core::marker::PhantomData;
+
 use recallable::recallable_model;
+
+mod nested {
+    #[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+    pub struct Inner {
+        pub value: i32,
+    }
+}
+
+#[derive(recallable::Recallable, recallable::Recall)]
+struct Wrapper<T> {
+    #[recallable]
+    value: nested::Inner,
+    #[recallable(skip)]
+    marker: PhantomData<T>,
+}
 
 const fn plus_one(x: i32) -> i32 {
     x + 1
@@ -98,4 +115,13 @@ fn test_recallable_skip_works_with_non_recallable_field_attribute() {
         &mut FieldWithNonRecallableAttrBeforeSkip,
         <FieldWithNonRecallableAttrBeforeSkip as recallable::Recallable>::Memento,
     ) = <FieldWithNonRecallableAttrBeforeSkip as recallable::Recall>::recall;
+}
+
+#[test]
+fn test_recallable_field_with_path_type_and_skipped_generic_param() {
+    // Regression: `nested::Inner` (multi-segment path) must not be confused with
+    // the generic type parameter `T`, even when they share the same last-segment name.
+    fn assert_recallable<T: recallable::Recallable + recallable::Recall>() {}
+    assert_recallable::<Wrapper<u32>>();
+    assert_recallable::<Wrapper<nested::Inner>>();
 }

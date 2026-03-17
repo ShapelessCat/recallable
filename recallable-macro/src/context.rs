@@ -138,9 +138,12 @@ impl<'a> MacroContext<'a> {
             let field_type = &field.ty;
             match field_behavior {
                 FieldBehavior::Recall => {
-                    let type_name = Self::extract_recallable_type_name(field_type)?;
-                    // `Recallable` usage overrides `NotRecallable` usage.
-                    preserved_types.insert(type_name, TypeUsage::Recallable);
+                    if let Some(type_name) = Self::extract_recallable_type_name(field_type)? {
+                        // `Recallable` usage overrides `NotRecallable` usage.
+                        preserved_types.insert(type_name, TypeUsage::Recallable);
+                    }
+                    // None means a concrete multi-segment path (e.g. `mod::Type`);
+                    // no generic param to track.
                 }
                 FieldBehavior::Keep => {
                     Self::record_non_recallable_type_usage(field_type, preserved_types);
@@ -195,13 +198,32 @@ impl<'a> MacroContext<'a> {
         }
     }
 
-    fn extract_recallable_type_name(field_type: &'a Type) -> syn::Result<&'a Ident> {
-        get_abstract_simple_type_name(field_type).ok_or_else(|| {
-            syn::Error::new_spanned(
+    fn extract_recallable_type_name(field_type: &'a Type) -> syn::Result<Option<&'a Ident>> {
+        match field_type {
+            Type::Path(tp) if tp.qself.is_none() => {
+                let segments = &tp.path.segments;
+                if segments.len() == 1 {
+                    let segment = &segments[0];
+                    if matches!(segment.arguments, PathArguments::None) {
+                        // Single bare ident — a generic type parameter.
+                        Ok(Some(&segment.ident))
+                    } else {
+                        // e.g. `Option<T>` — unsupported.
+                        Err(syn::Error::new_spanned(
+                            field_type,
+                            "Only a simple generic type is supported here",
+                        ))
+                    }
+                } else {
+                    // Multi-segment path like `mod::Type` — concrete type, no generic param.
+                    Ok(None)
+                }
+            }
+            _ => Err(syn::Error::new_spanned(
                 field_type,
-                "Only a simple generic type is supported here", // TODO: remove this limit
-            )
-        })
+                "Only a simple generic type is supported here",
+            )),
+        }
     }
 
     fn record_non_recallable_type_usage(
@@ -266,11 +288,24 @@ struct FieldAction<'a> {
 }
 
 impl<'a> FieldAction<'a> {
-    fn build_field(&self) -> TokenStream2 {
+    fn build_field(
+        &self,
+        recallable_trait: &TokenStream2,
+        generic_type_params: &std::collections::HashSet<&Ident>,
+    ) -> TokenStream2 {
         let member = &self.member;
         let ty = self.ty;
         let field_ty = if self.behavior == FieldBehavior::Recall {
-            quote! { #ty::Memento }
+            if is_generic_type_param(ty, generic_type_params) {
+                // Generic type param (e.g. `T`): use `T::Memento` so that derive macros on the
+                // memento struct generate correct bounds like `T: Clone` rather than the
+                // unsatisfied `<T as Recallable>::Memento: Clone`.
+                quote! { #ty::Memento }
+            } else {
+                // Concrete type (e.g. `mod::Type` or `String`): use fully-qualified syntax to
+                // avoid E0223 "ambiguous associated type".
+                quote! { <#ty as #recallable_trait>::Memento }
+            }
         } else {
             quote! { #ty }
         };
@@ -358,13 +393,16 @@ fn collect_used_simple_types(ty: &Type) -> Vec<&Ident> {
     collector.used_simple_types
 }
 
-fn get_abstract_simple_type_name(t: &Type) -> Option<&Ident> {
-    match t {
-        Type::Path(tp) if !tp.path.segments.is_empty() => {
-            let last_segment = tp.path.segments.last()?;
-            // Ensure the path segment has no arguments (e.g., it's not `Vec<T>` or `Option<T>`).
-            matches!(last_segment.arguments, PathArguments::None).then_some(&last_segment.ident)
+fn is_generic_type_param(
+    ty: &Type,
+    generic_type_params: &std::collections::HashSet<&Ident>,
+) -> bool {
+    match ty {
+        Type::Path(tp) if tp.qself.is_none() && tp.path.segments.len() == 1 => {
+            let segment = &tp.path.segments[0];
+            matches!(segment.arguments, PathArguments::None)
+                && generic_type_params.contains(&segment.ident)
         }
-        _ => None,
+        _ => false,
     }
 }
