@@ -1,6 +1,7 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::Fields;
+use std::collections::HashSet;
+use syn::{Fields, Ident};
 
 use crate::{IS_SERDE_ENABLED, context::MacroContext};
 
@@ -24,7 +25,13 @@ impl<'a> MacroContext<'a> {
         } else {
             quote! { where #(#bounded_types),* }
         };
-        let recall_fields = self.field_actions.iter().map(|action| action.build_field());
+        let recallable_trait = &self.recallable_trait;
+        let generic_type_params: HashSet<&Ident> =
+            self.generics.type_params().map(|p| &p.ident).collect();
+        let recall_fields = self
+            .field_actions
+            .iter()
+            .map(|action| action.build_field(recallable_trait, &generic_type_params));
         let body = match &self.fields {
             Fields::Named(_) => quote! { #where_clause { #(#recall_fields),* } },
             Fields::Unnamed(_) => quote! { ( #(#recall_fields),* ) #where_clause; },

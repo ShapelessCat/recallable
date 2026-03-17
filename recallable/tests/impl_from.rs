@@ -1,4 +1,21 @@
+use core::marker::PhantomData;
+
 use recallable::{Recall, Recallable, recallable_model};
+
+mod path_nested {
+    #[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+    pub struct Leaf {
+        pub value: i32,
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+struct PathWrapper<Leaf> {
+    #[recallable]
+    leaf: path_nested::Leaf,
+    #[recallable(skip)]
+    marker: PhantomData<Leaf>,
+}
 
 #[recallable_model]
 #[derive(Clone, Debug, PartialEq)]
@@ -81,4 +98,21 @@ fn test_from_recall_respects_skipped_fields() {
     target.recall(memento);
     assert_eq!(target.value, 10);
     assert_eq!(target.untouched, 99);
+}
+
+#[test]
+fn test_recallable_field_with_multi_segment_path_type() {
+    // Regression: `path_nested::Leaf` (multi-segment path) must not be confused with
+    // the generic type parameter `T` even when the last segment name matches.
+    let original = PathWrapper {
+        leaf: path_nested::Leaf { value: 42 },
+        marker: PhantomData::<u32>,
+    };
+    let memento: <PathWrapper<u32> as Recallable>::Memento = original.clone().into();
+    let mut target = PathWrapper {
+        leaf: path_nested::Leaf { value: 0 },
+        marker: PhantomData::<u32>,
+    };
+    target.recall(memento);
+    assert_eq!(target, original);
 }
