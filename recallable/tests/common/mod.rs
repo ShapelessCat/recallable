@@ -1,4 +1,4 @@
-use recallable::recallable_model;
+use recallable::{Recallable, recallable_model};
 use serde::{Deserialize, Serialize};
 
 pub const fn identity(x: &i32) -> i32 {
@@ -25,6 +25,9 @@ pub struct ScopedMeasurement<ScopeType, MeasurementType, MeasurementOutput> {
     pub current_base: MeasurementResult<MeasurementOutput>,
 }
 
+pub type ScopedMeasurementMemento =
+    <ScopedMeasurement<u32, FakeMeasurement<i32, fn(&i32) -> i32>, i32> as Recallable>::Memento;
+
 #[recallable_model]
 #[derive(Clone, Default, Debug)]
 pub struct SimpleStruct {
@@ -38,6 +41,9 @@ pub struct TupleStruct(pub i32, pub u32);
 #[recallable_model]
 #[derive(Clone, Debug)]
 pub struct TupleStructWithSkippedMiddle<F>(pub i32, #[recallable(skip)] pub F, pub i64);
+
+pub type TupleStructWithSkippedMiddleMemento =
+    <TupleStructWithSkippedMiddle<fn(i32) -> i32> as Recallable>::Memento;
 
 #[recallable_model]
 #[derive(Clone, Debug)]

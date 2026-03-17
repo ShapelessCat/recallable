@@ -40,8 +40,7 @@ fn test_scoped_measurement_memento_value_equality() {
     };
 
     let json = serde_json::to_string(&original).unwrap();
-    let memento: <ScopedMeasurement<u32, FakeMeasurement<i32, fn(&i32) -> i32>, i32> as Recallable>::Memento =
-        serde_json::from_str(&json).unwrap();
+    let memento: ScopedMeasurementMemento = serde_json::from_str(&json).unwrap();
 
     let mut target = ScopedMeasurement {
         current_control_level: 0u32,
@@ -81,8 +80,7 @@ fn test_tuple_struct_memento() {
 #[test]
 fn test_tuple_struct_skip_keeps_original_field_index() {
     let mut s = TupleStructWithSkippedMiddle(1, identity, 2);
-    let memento: <TupleStructWithSkippedMiddle<fn(i32) -> i32> as Recallable>::Memento =
-        serde_json::from_str(r#"[10, 20]"#).unwrap();
+    let memento: TupleStructWithSkippedMiddleMemento = serde_json::from_str(r#"[10, 20]"#).unwrap();
     s.recall(memento);
     assert_eq!(s.0, 10);
     assert_eq!(s.2, 20);

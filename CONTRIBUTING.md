@@ -12,7 +12,7 @@ Thank you for your interest in contributing to Recallable! We welcome contributi
 
 ### Prerequisites
 
-- Rust (latest stable version)
+- Rust 1.85 or newer (latest stable recommended for day-to-day development)
 - Cargo
 
 ### Building the Project
@@ -24,7 +24,10 @@ cargo build
 ### Running Tests
 
 ```bash
-cargo test
+cargo test --package recallable
+cargo test --package recallable --no-default-features
+cargo test --package recallable --features impl_from
+cargo test --package recallable --all-features
 ```
 
 <!-- ### Running Examples
@@ -40,8 +43,7 @@ cargo run --example example_name
 ### Code Style
 
 - Follow the [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
-- Run `cargo fmt` before committing
-- Run `cargo clippy` and address any warnings
+- Run `cargo clippy --workspace --all-targets --all-features --fix` and address any warnings
 
 ### Documentation
 
@@ -68,7 +70,7 @@ cargo run --example example_name
 - Keep PRs focused on a single feature or bug fix
 - Include tests for new functionality
 - Update documentation as needed
-- Ensure CI passes before requesting review
+- Ensure CI passes on both stable and the MSRV job before requesting review
 
 ## Reporting Bugs
 

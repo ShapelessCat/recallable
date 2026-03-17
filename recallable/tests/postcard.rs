@@ -60,8 +60,7 @@ fn test_scoped_measurement_memento_value_equality() -> anyhow::Result<()> {
     };
 
     let state = postcard::to_vec::<_, POSTCARD_CAPACITY>(&original)?;
-    let memento: <ScopedMeasurement<u32, FakeMeasurement<i32, fn(&i32) -> i32>, i32> as Recallable>::Memento =
-        postcard::from_bytes(&state)?;
+    let memento: ScopedMeasurementMemento = postcard::from_bytes(&state)?;
 
     let mut target = ScopedMeasurement {
         current_control_level: 0u32,
@@ -100,8 +99,7 @@ fn test_tuple_struct_memento() {
 #[test]
 fn test_tuple_struct_skip_keeps_original_field_index() {
     let mut s = TupleStructWithSkippedMiddle(1, identity, 2);
-    let memento: <TupleStructWithSkippedMiddle<fn(i32) -> i32> as Recallable>::Memento =
-        decode_postcard(&(10i32, 20i64));
+    let memento: TupleStructWithSkippedMiddleMemento = decode_postcard(&(10i32, 20i64));
     s.recall(memento);
     assert_eq!(s.0, 10);
     assert_eq!(s.2, 20);

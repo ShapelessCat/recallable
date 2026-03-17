@@ -65,7 +65,7 @@ The provided procedural macros handle the heavy lifting; they generate companion
 
 ## Installation
 
-**MSRV:** Rust 1.85 (edition 2024).
+**MSRV:** Rust 1.85 (edition 2024). CI validates both the current stable toolchain and Rust 1.85.0.
 
 Add this to your `Cargo.toml`:
 

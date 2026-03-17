@@ -18,10 +18,10 @@ cargo test --package recallable                       # Tests with default featu
 cargo test --package recallable --no-default-features # Tests without serde
 cargo test --package recallable --features impl_from  # Tests with impl_from feature
 cargo fmt -- --check                                  # Format check
-cargo clippy --verbose                                # Lint
+cargo clippy --workspace --all-targets --all-features # Lint
 ```
 
-CI runs all three test configurations. Coverage thresholds: 100% function, 90% line, 90% region.
+CI runs the test matrix on stable and validates the MSRV on Rust 1.85.0. Coverage thresholds: 100% function, 90% line, 90% region.
 
 ## Architecture
 
@@ -68,4 +68,4 @@ Tests live in `recallable/tests/`. Compile-fail UI tests use `trybuild` in `test
 
 ## Code Style
 
-Follow [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/). Run `cargo fmt` and `cargo clippy` before committing. Add doc comments with examples for public APIs.
+Follow [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/). Run `cargo fmt -- --check` and `cargo clippy --workspace --all-targets --all-features` before committing. Add doc comments with examples for public APIs.
