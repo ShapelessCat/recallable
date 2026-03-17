@@ -12,7 +12,7 @@ Thank you for your interest in contributing to Recallable! We welcome contributi
 
 ### Prerequisites
 
-- Rust 1.85 or newer (latest stable recommended for day-to-day development)
+- Rust 1.88 or newer (latest stable recommended for day-to-day development)
 - Cargo
 
 ### Building the Project

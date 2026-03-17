@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Recallable is a Rust library implementing the Memento design pattern via procedural macros. It generates companion "memento" structs and state restoration logic at compile time. Two-crate workspace: `recallable` (traits) and `recallable-macro` (proc macros).
 
-MSRV: Rust 1.85 (edition 2024). `no_std` compatible.
+MSRV: Rust 1.88 (edition 2024). `no_std` compatible.
 
 ## Commands
 
@@ -21,7 +21,7 @@ cargo fmt -- --check                                  # Format check
 cargo clippy --workspace --all-targets --all-features # Lint
 ```
 
-CI runs the test matrix on stable and validates the MSRV on Rust 1.85.0. Coverage thresholds: 100% function, 90% line, 90% region.
+CI runs the test matrix on stable and validates the MSRV on Rust 1.88.0. Coverage thresholds: 100% function, 90% line, 90% region.
 
 ## Architecture
 
