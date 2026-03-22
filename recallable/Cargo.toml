@@ -24,7 +24,7 @@ serde = ["recallable-macro/serde"]
 impl_from = ["recallable-macro/impl_from"]
 
 [dev-dependencies]
-anyhow = "1.0.100"
+anyhow = "1.0.102"
 serde = { version = "1.0.228", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0.149", default-features = false, features = [
     "alloc",
