@@ -17,7 +17,106 @@
 
 extern crate self as recallable;
 
-pub use recallable_macro::{Recall, Recallable, recallable_model};
+/// Attribute macro that prepares a struct for the Memento pattern.
+///
+/// Adds `#[derive(Recallable, Recall)]` automatically. When the `serde` feature is enabled,
+/// also derives `serde::Serialize` on the struct and injects `#[serde(skip)]` on fields
+/// marked with `#[recallable(skip)]`.
+///
+/// This example requires the `serde` feature.
+///
+/// ```rust
+/// # #[cfg(feature = "serde")]
+/// # {
+/// use recallable::{Recall, Recallable, recallable_model};
+///
+/// #[recallable_model]
+/// #[derive(Clone, Debug)]
+/// struct Settings {
+///     volume: u8,
+///     brightness: u8,
+///     #[recallable(skip)]
+///     on_change: fn(),
+/// }
+///
+/// fn noop() {}
+///
+/// let mut settings = Settings { volume: 50, brightness: 80, on_change: noop };
+/// let memento: <Settings as Recallable>::Memento =
+///     serde_json::from_str(r#"{"volume":75,"brightness":60}"#).unwrap();
+/// settings.recall(memento);
+/// assert_eq!(settings.volume, 75);
+/// assert_eq!(settings.brightness, 60);
+/// // on_change is skipped — unchanged by recall
+/// # }
+/// ```
+pub use recallable_macro::recallable_model;
+
+/// Derive macro that generates a companion memento struct and the [`Recallable`] trait impl.
+///
+/// The memento struct mirrors the original but replaces `#[recallable]`-annotated fields
+/// with their `<FieldType as Recallable>::Memento` type and omits `#[recallable(skip)]` fields.
+///
+/// This example requires the `serde` feature.
+///
+/// ```rust
+/// # #[cfg(feature = "serde")]
+/// # {
+/// use recallable::{Recall, Recallable};
+///
+/// #[derive(Clone, Debug, serde::Serialize, Recallable, Recall)]
+/// struct Outer {
+///     label: String,
+///     #[recallable]
+///     inner: Inner,
+/// }
+///
+/// #[derive(Clone, Debug, serde::Serialize, Recallable, Recall)]
+/// struct Inner {
+///     count: u32,
+/// }
+///
+/// // The memento type is accessible via the associated type
+/// let memento: <Outer as Recallable>::Memento =
+///     serde_json::from_str(r#"{"label":"updated","inner":{"count":99}}"#).unwrap();
+///
+/// let mut outer = Outer { label: "original".into(), inner: Inner { count: 0 } };
+/// outer.recall(memento);
+/// assert_eq!(outer.label, "updated");
+/// assert_eq!(outer.inner.count, 99);
+/// # }
+/// ```
+pub use recallable_macro::Recallable;
+
+/// Derive macro that generates the [`Recall`] trait implementation.
+///
+/// For plain fields, `recall` assigns the memento value directly. For fields annotated
+/// with `#[recallable]`, it recursively calls `recall` on the nested value.
+/// Fields marked `#[recallable(skip)]` are left untouched.
+///
+/// This example requires the `serde` feature.
+///
+/// ```rust
+/// # #[cfg(feature = "serde")]
+/// # {
+/// use recallable::{Recall, Recallable};
+///
+/// #[derive(Clone, Debug, serde::Serialize, Recallable, Recall)]
+/// struct State {
+///     score: i32,
+///     #[recallable(skip)]
+///     cached_label: String,
+/// }
+///
+/// let mut state = State { score: 0, cached_label: "stale".into() };
+/// let memento: <State as Recallable>::Memento =
+///     serde_json::from_str(r#"{"score":42}"#).unwrap();
+/// state.recall(memento);
+/// assert_eq!(state.score, 42);
+/// assert_eq!(state.cached_label, "stale"); // skip preserves the value
+/// # }
+/// ```
+pub use recallable_macro::Recall;
 
 /// A type that declares a companion memento type.
 ///
