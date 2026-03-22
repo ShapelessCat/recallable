@@ -155,8 +155,9 @@ Applied to both `#[derive(Recallable)]` and `#[derive(Recall)]` requirement list
 Add to the `#[derive(Recallable)]` section:
 
 > The generated memento struct derives `Clone`, `Debug`, and `PartialEq`. With the `serde`
-> feature enabled, it also derives `Deserialize`. All non-skipped field types must implement
-> these traits.
+> feature enabled, it also derives `Deserialize`. For regular fields, the field type must
+> implement these traits. For `#[recallable]` fields, the field's memento type
+> (`<FieldType as Recallable>::Memento`) must implement them.
 
 #### Fix 1.8 — API Reference: `#[recallable_model]` ordering note
 
@@ -264,11 +265,13 @@ constructed via struct literal from user code.
 ///     }
 /// }
 ///
-/// let mut settings = Settings { volume: 50, brightness: 70 };
-/// let memento = SettingsMemento { volume: 80, brightness: 40 };
-/// settings.recall(memento);
-/// assert_eq!(settings.volume, 80);
-/// assert_eq!(settings.brightness, 40);
+/// fn main() {
+///    let mut settings = Settings { volume: 50, brightness: 70 };
+///    let memento = SettingsMemento { volume: 80, brightness: 40 };
+///    settings.recall(memento);
+///    assert_eq!(settings.volume, 80);
+///    assert_eq!(settings.brightness, 40);
+/// }
 /// ```
 ```
 
