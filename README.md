@@ -12,7 +12,9 @@ Traits (`Recallable`, `Recall`, `TryRecall`) and procedural macros for defining 
 restoration behaviors.
 
 Implementing `Recallable` for a struct means specifying its associated memento type. Its subtraits `Recall` and
-`TryRecall` provide the interface for applying state restoration infallibly and fallibly, respectively.
+`TryRecall` provide the interface for applying state restoration infallibly and fallibly, respectively. The blanket
+`TryRecall` implementation for all `Recall` types mirrors the `From`/`TryFrom` relationship in the standard library, so
+infallible types work seamlessly in fallible contexts.
 
 Note:
 Each recallable struct has one associated memento type, and each memento corresponds to exactly one struct.
@@ -53,11 +55,13 @@ The provided procedural macros handle the heavy lifting; they generate companion
 - **`#[recallable_model]` Attribute Macro**: Injects `#[derive(Recallable, Recall)]` and, with the default `serde`
   feature, `#[derive(serde::Serialize)]` plus `#[serde(skip)]` on fields marked `#[recallable(skip)]`
 - **Automatic Memento Type Generation**: Derives a companion memento type for any struct annotated with
-  `#[derive(Recallable)]`, exposed as `<Type as Recallable>::Memento`
+  `#[derive(Recallable)]`, exposed as `<Type as Recallable>::Memento`. The generated type is kept out of your namespace,
+  preventing pollution and allowing internal naming to evolve without breaking downstream code
 - **Recursive Recalling**: Use the `#[recallable]` attribute to mark fields that require recursive recalling
 - **Smart Exclusion**: Excludes fields marked with `#[recallable(skip)]`
 - **Serde Integration (optional, default)**: Generated memento types automatically implement `serde::Deserialize`
-  (exclude the `serde` feature to opt out)
+  but not `Serialize` — mementos are meant to be received and applied, not sent back out. This asymmetry aligns with
+  typical durable-execution and incremental-update use cases. Exclude the `serde` feature to opt out
 - **Generic Support**: Support for simple generic type parameters (e.g. `T`) with automatic trait bound inference
 - **Optional `From` Derive**: Enable `From<Struct>` for `<Struct as Recallable>::Memento` with the `impl_from`
   feature
@@ -108,9 +112,12 @@ Before diving into the examples, be aware of the following constraints:
 - **Serde behavior** — with the default `serde` feature:
   - `#[recallable_model]` injects `#[derive(serde::Serialize)]` and adds `#[serde(skip)]` to `#[recallable(skip)]`
     fields. Adding a manual `#[derive(Serialize)]` is a compile error.
-  - `#[derive(Recallable)]` makes the memento derive `Deserialize` but not `Serialize` (by design — mementos are
-    deserialized from stored state, not serialized directly).
-  - Serde attributes like `#[serde(rename = "...")]` on the original struct are NOT forwarded to the memento struct.
+  - `#[derive(Recallable)]` makes the memento derive `Deserialize` but not `Serialize`
+    (see [Serde Integration](#features) above for the rationale).
+  - Serde attributes like `#[serde(rename = "...")]` on the original struct are not forwarded to the memento struct.
+    The generated memento mirrors the original struct's field layout by design — the macro intentionally keeps
+    generation simple rather than adding complex attribute forwarding. For use cases requiring custom serde attributes
+    on the memento, implement `Recallable` and define the memento struct manually.
 
 ## Usage
 
