@@ -393,7 +393,7 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for det
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE-MIT) and [Apache-2.0 License](LICENSE-APACHE).
+This project is licensed under the [MIT License](LICENSE-MIT.txt) and [Apache-2.0 License](LICENSE-APACHE.txt).
 
 ## Related Projects
 
