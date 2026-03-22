@@ -13,6 +13,9 @@ single deduplicated document. Each finding is tagged with the model(s) that
 raised it. Where reviewers disagreed on framing or priority, those differences
 are noted.
 
+> **Status key:** Items marked with ✅ have been addressed. Items marked with
+> ⚠️ have been partially addressed. Unmarked items remain open.
+
 ---
 
 ## 1. Overall Assessment
@@ -118,6 +121,8 @@ users are left to figure it out.
 
 ### 3.1. README Oversells Generic Support
 
+✅ **Fixed.** README now says "Support for simple generic type parameters (e.g. `T`)."
+
 **Raised by:** Codex, Claude (Gemini notes the limitation but does not flag
 the README contradiction)
 
@@ -141,6 +146,10 @@ Limitations section before the examples. Codex frames this as a
 "product-positioning problem," not just a wording issue.
 
 ### 3.2. Lifetime Rejection Is Broader Than Documented
+
+⚠️ **Partially fixed.** README and doc comments now say "lifetime-parameterized
+structs." The compiler error message in `context.rs:99` still says "borrowed
+fields" (code change, to be addressed separately).
 
 **Raised by:** Codex, Claude (Gemini notes it as a constraint)
 
@@ -171,6 +180,12 @@ recommends investigating enum memento derivation as a future feature.
 
 ## 4. Hardcoded Memento Derives
 
+⚠️ **Partially fixed.** The implicit `Clone`/`Debug`/`PartialEq` requirements
+are now documented in the README ("Requirements & Limitations" section), the
+API Reference (`#[derive(Recallable)]` section), and the `derive_recallable`
+doc comment. The customization gap (no `memento_derive(...)` attribute) remains
+open.
+
 **Raised by:** Gemini, Codex, Claude
 
 The generated memento struct always derives `Clone`, `Debug`, `PartialEq`
@@ -199,6 +214,12 @@ requirements prominently.
 
 ### 5.1. Invisible Attribute Mutation
 
+✅ **Fixed (documentation).** The serde injection behavior is now documented in
+the README ("Requirements & Limitations" section, `#[recallable_model]` API
+Reference entry) and the `recallable_model` doc comment. The attribute-ordering
+requirement is documented in the README, the "Using `#[recallable_model]`"
+usage section, and the macro doc comment.
+
 **Raised by:** Codex, Claude (Gemini views this positively)
 
 When the `serde` feature is enabled, `#[recallable_model]`:
@@ -223,6 +244,10 @@ or document every injected attribute prominently. Document the
 attribute-ordering requirement in the README.
 
 ### 5.2. Serde Attribute Forwarding Risk
+
+✅ **Fixed (documented).** The README "Requirements & Limitations" section now
+states: "Serde attributes like `#[serde(rename = \"...\")]` on the original
+struct are NOT forwarded to the memento struct."
 
 **Raised by:** Claude only
 
@@ -251,6 +276,10 @@ above.
 
 ### 6.1. README Wording Issues
 
+✅ **Fixed.** The garbled sentence is rewritten. The generic support claim is
+corrected. The contradiction between Features and Limitations is eliminated
+(Limitations section replaced by "Requirements & Limitations" before examples).
+
 **Raised by:** Codex, Claude
 
 - `README.md:52-53` contains a garbled sentence: "More or creating a derive
@@ -260,6 +289,9 @@ above.
   the limitations at line 239 (see Section 3.1).
 
 ### 6.2. Installation and Examples Mismatch
+
+✅ **Fixed.** The Installation section now lists `serde`, `postcard`, and
+`heapless` as additional dependencies needed to run the README examples.
 
 **Raised by:** Codex, Claude
 
@@ -271,6 +303,9 @@ limitations.
 
 ### 6.3. Limitations Section Placement
 
+✅ **Fixed.** The standalone "Limitations" section is removed. A new
+"Requirements & Limitations" section is placed before all usage examples.
+
 **Raised by:** Codex, Claude
 
 The Limitations section is near the bottom of the README, after all examples.
@@ -280,6 +315,10 @@ non-goals" section near the top.
 
 ### 6.4. Missing Examples Directory
 
+⚠️ **Partially fixed.** The commented-out "Running Examples" TODO block in
+`CONTRIBUTING.md` has been removed. The `examples/` directory itself is still
+missing (requires creating example crates — a separate task).
+
 **Raised by:** Gemini, Codex, Claude
 
 There is no `examples/` directory. `CONTRIBUTING.md:33-39` contains a
@@ -287,6 +326,10 @@ commented-out "Running Examples" section with a TODO. For a proc-macro crate,
 standalone runnable examples are one of the most effective onboarding tools.
 
 ### 6.5. Thin Changelog
+
+✅ **Fixed.** The 0.1.0 changelog entry now itemizes all features: traits,
+derive macros, attribute macro, field attributes, cargo features, and
+`no_std` compatibility.
 
 **Raised by:** Codex, Claude
 
@@ -303,6 +346,11 @@ documentation hints or examples showing how to create type aliases
 friction.
 
 ### 6.7. Attribute Ordering Documentation
+
+✅ **Fixed.** The attribute-ordering requirement is now documented in the
+README ("Requirements & Limitations", "Using `#[recallable_model]`", and the
+API Reference `#[recallable_model]` entry) and in the `recallable_model` doc
+comment in `recallable-macro/src/lib.rs`.
 
 **Raised by:** Gemini, Claude
 
@@ -347,6 +395,10 @@ field reordering between serialization and deserialization. These are the
 scenarios most likely to bite users of a persistence-focused library.
 
 ### 7.4. Minimal Doc Tests
+
+⚠️ **Partially fixed.** A doc example has been added to the `Recall` trait
+(3 doc tests now exist: `Recallable`, `Recall`, `TryRecall`). The
+`recallable_model` macro and field-level attributes still have no doc tests.
 
 **Raised by:** Claude only
 
@@ -439,21 +491,22 @@ from the memento type.
 
 ### High Priority
 
-1. Fix README: replace "Full support for generic types" with
+1. ✅ Fix README: replace "Full support for generic types" with
    accurate language.
    *— Codex, Claude*
-2. Document implicit `Clone`/`Debug`/`PartialEq` requirements
+2. ✅ Document implicit `Clone`/`Debug`/`PartialEq` requirements
    on mementos.
    *— Gemini, Codex, Claude*
-3. Fix lifetime error message: "lifetime-parameterized structs"
-   not "borrowed fields."
+3. ⚠️ Fix lifetime error message: "lifetime-parameterized structs"
+   not "borrowed fields." (README and doc comments fixed; compiler
+   error message in `context.rs:99` still says "borrowed fields")
    *— Codex, Claude*
-4. Fix garbled sentence at README line 52-53.
+4. ✅ Fix garbled sentence at README line 52-53.
    *— Codex, Claude*
-5. Document or reduce `#[recallable_model]` invisible serde
+5. ✅ Document or reduce `#[recallable_model]` invisible serde
    behavior.
    *— Codex, Claude*
-6. Move Limitations section before examples in README.
+6. ✅ Move Limitations section before examples in README.
    *— Codex, Claude*
 
 ### Medium Priority
@@ -461,12 +514,13 @@ from the memento type.
 1. Add `#[recallable(memento_derive(...))]` for user-controlled
    memento derives.
    *— Gemini, Codex, Claude*
-2. Create `examples/` directory with runnable examples.
+2. ⚠️ Create `examples/` directory with runnable examples.
+   (CONTRIBUTING.md TODO block removed; directory not yet created)
    *— Gemini, Codex, Claude*
-3. Document `#[recallable_model]` attribute-ordering requirement
+3. ✅ Document `#[recallable_model]` attribute-ordering requirement
    in README.
    *— Gemini, Claude*
-4. Fix installation section to mention `serde`/`postcard`
+4. ✅ Fix installation section to mention `serde`/`postcard`
    dev-dependencies.
    *— Codex, Claude*
 5. Stop tracking `.vscode/settings.json` or add `.vscode/` to
@@ -485,12 +539,13 @@ from the memento type.
 2. Add property-based round-trip tests for serialization
    invariants.
    *— Claude*
-3. Expand doc tests to cover `Recall`, `recallable_model`, and
-   field attributes.
+3. ⚠️ Expand doc tests to cover `Recall`, `recallable_model`, and
+   field attributes. (`Recall` doc test added; `recallable_model`
+   and field attributes still missing)
    *— Claude*
 4. Consider supporting `Option<T>` for partial-update semantics.
    *— Claude*
-5. Expand changelog beyond bootstrap entry.
+5. ✅ Expand changelog beyond bootstrap entry.
    *— Codex, Claude*
 6. Add `cargo` ecosystem to dependabot configuration.
    *— Claude*
@@ -509,12 +564,14 @@ from the memento type.
 
 1. The project is well-engineered internally — clean code, modular macro
    structure, strong CI, broad test coverage, no bugs found.
-2. Hardcoded memento derives create hidden requirements and prevent
-   customization.
-3. Generic support is narrower than the README claims.
-4. Lifetime error messaging conflates "borrowed fields" with
-   "lifetime-parameterized structs."
-5. There is no `examples/` directory.
+2. ⚠️ Hardcoded memento derives create hidden requirements and prevent
+   customization. (Requirements now documented; customization still missing.)
+3. ✅ Generic support is narrower than the README claims. (README corrected.)
+4. ⚠️ Lifetime error messaging conflates "borrowed fields" with
+   "lifetime-parameterized structs." (Documentation fixed; compiler error
+   message still says "borrowed fields.")
+5. ⚠️ There is no `examples/` directory. (CONTRIBUTING.md TODO removed;
+   directory not yet created.)
 6. The crate is promising but not yet ready for broad public adoption.
 
 ### Where Reviewers Diverge
