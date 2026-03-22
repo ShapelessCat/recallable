@@ -345,11 +345,15 @@ impl<'a> FieldAction<'a> {
 ///
 /// Uses `proc-macro-crate` to resolve the actual dependency name from `Cargo.toml`,
 /// which handles crate renames (e.g., `my_recallable = { package = "recallable", ... }`).
-/// Falls back to `::recallable` if the lookup fails.
+///
+/// Even when the macro expands inside the `recallable` crate itself, prefer the
+/// absolute `::recallable` path instead of `crate`. That keeps doctests working:
+/// rustdoc compiles them as external crates, so `crate` would point at the
+/// temporary doctest crate rather than the real `recallable` library.
 #[inline]
 pub(super) fn crate_path() -> TokenStream2 {
     match crate_name("recallable") {
-        Ok(FoundCrate::Itself) => quote! { crate },
+        Ok(FoundCrate::Itself) => quote! { ::recallable },
         Ok(FoundCrate::Name(name)) => {
             let ident = Ident::new(&name, Span::call_site());
             quote! { ::#ident }
