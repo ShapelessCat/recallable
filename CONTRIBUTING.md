@@ -30,14 +30,6 @@ cargo test --package recallable --features impl_from
 cargo test --package recallable --all-features
 ```
 
-<!-- ### Running Examples
-
-TODO: Will add soon
-
-```bash
-cargo run --example example_name
-``` -->
-
 ## Making Changes
 
 ### Code Style

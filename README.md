@@ -36,6 +36,7 @@ The provided procedural macros handle the heavy lifting; they generate companion
 
 - [Features](#features)
 - [Installation](#installation)
+- [Requirements & Limitations](#requirements--limitations)
 - [Usage](#usage)
   - [Basic Example](#basic-example)
   - [Using `#[recallable_model]`](#using-recallable_model)
@@ -49,15 +50,15 @@ The provided procedural macros handle the heavy lifting; they generate companion
 
 ## Features
 
-- **`#[recallable_model]` Attribute Macro**: More or creating a derive attribute, inserting `Recallable` and `Recall`,
-  and (with default Cargo feature `serde`) `serde::Serialize`
+- **`#[recallable_model]` Attribute Macro**: Injects `#[derive(Recallable, Recall)]` and, with the default `serde`
+  feature, `#[derive(serde::Serialize)]` plus `#[serde(skip)]` on fields marked `#[recallable(skip)]`
 - **Automatic Memento Type Generation**: Derives a companion memento type for any struct annotated with
   `#[derive(Recallable)]`, exposed as `<Type as Recallable>::Memento`
 - **Recursive Recalling**: Use the `#[recallable]` attribute to mark fields that require recursive recalling
 - **Smart Exclusion**: Excludes fields marked with `#[recallable(skip)]`
 - **Serde Integration (optional, default)**: Generated memento types automatically implement `serde::Deserialize`
   (exclude the `serde` feature to opt out)
-- **Generic Support**: Full support for generic types with automatic trait bound inference
+- **Generic Support**: Support for simple generic type parameters (e.g. `T`) with automatic trait bound inference
 - **Optional `From` Derive**: Enable `From<Struct>` for `<Struct as Recallable>::Memento` with the `impl_from`
   feature
 - **Zero Runtime Overhead**: All code generation happens at compile time
@@ -75,6 +76,41 @@ recallable = "0.1.0" # Please use the latest version
 ```
 
 Check this project's Cargo feature flags to see what you want to enable or disable.
+
+The examples in this README also use `serde`, `postcard`, and `heapless`. Add them as dependencies if you want to run
+the examples:
+
+```toml
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+postcard = "1"
+heapless = "0.8"
+```
+
+## Requirements & Limitations
+
+Before diving into the examples, be aware of the following constraints:
+
+- **Structs only** — enums and unions are not supported.
+- **No lifetime-parameterized structs** — any struct with a lifetime parameter (e.g. `Foo<'a>`) is rejected, even if
+  no fields borrow data.
+- **Simple generic types only** — `#[recallable]` fields accept bare type parameters (`T`) and concrete multi-segment
+  paths (`mod::Type`). Parameterized types like `Option<T>`, `Vec<T>`, and associated types like
+  `<T as Trait>::Assoc` are rejected.
+- **Implicit trait requirements on field types** — the generated memento struct derives `Clone`, `Debug`, and
+  `PartialEq` (and `Deserialize` when the `serde` feature is enabled). For regular fields, the field type itself must
+  implement these traits. For `#[recallable]` fields, it is the field's *memento type*
+  (`<FieldType as Recallable>::Memento`) that must implement them. If any required trait is missing, compilation fails
+  with an error pointing at generated code.
+- **`#[recallable_model]` attribute ordering** — `#[recallable_model]` must appear *before* any attributes it needs
+  to inspect (e.g., before `#[derive(Serialize)]`). Attribute macros only see attributes that follow them in source
+  order.
+- **Serde behavior** — with the default `serde` feature:
+  - `#[recallable_model]` injects `#[derive(serde::Serialize)]` and adds `#[serde(skip)]` to `#[recallable(skip)]`
+    fields. Adding a manual `#[derive(Serialize)]` is a compile error.
+  - `#[derive(Recallable)]` makes the memento derive `Deserialize` but not `Serialize` (by design — mementos are
+    deserialized from stored state, not serialized directly).
+  - Serde attributes like `#[serde(rename = "...")]` on the original struct are NOT forwarded to the memento struct.
 
 ## Usage
 
@@ -133,6 +169,9 @@ struct User {
 `serde` feature enabled, it also adds `serde::Serialize` and injects `#[serde(skip)]`
 for fields marked `#[recallable(skip)]`.
 Add any other derives you need (for example, `Deserialize`) alongside it.
+
+**Note:** `#[recallable_model]` must appear before other derive/attribute macros it needs
+to interact with. See [Requirements & Limitations](#requirements--limitations) for details.
 
 ### Skipping Fields
 
@@ -232,13 +271,6 @@ impl TryRecall for Config {
 }
 ```
 
-### Limitations
-
-- Only structs are supported (enums and unions are not).
-- Lifetime parameters are not supported.
-- `#[recallable]` currently only supports simple generic types (not complex types like `Vec<T>`).
-- Generated memento types derive `Deserialize` (default) but not `Serialize` (by design).
-
 ## How It Works
 
 When you derive `Recallable` on a struct, for instance, `Struct`:
@@ -280,6 +312,10 @@ Attribute macro that injects `Recallable` and `Recall` derives for a struct.
 - With the default `serde` feature enabled, it also derives `serde::Serialize` and
   applies `#[serde(skip)]` to fields annotated with `#[recallable(skip)]`.
 
+**Attribute ordering:** `#[recallable_model]` must appear before any attributes it needs
+to inspect. An attribute macro's input only contains attributes that follow it in source
+order.
+
 ### `#[derive(Recallable)]`
 
 Generates a companion memento type, exposed as `<Struct as Recallable>::Memento`, and implements
@@ -288,8 +324,13 @@ Generates a companion memento type, exposed as `<Struct as Recallable>::Memento`
 **Requirements:**
 
 - Must be applied to a struct (not enums or unions)
-- Does not support lifetime parameters (borrowed fields)
+- Does not support lifetime-parameterized structs
 - Works with named, unnamed (tuple), and unit structs
+
+The generated memento struct derives `Clone`, `Debug`, and `PartialEq`. With the `serde`
+feature enabled, it also derives `Deserialize`. For regular fields, the field type must
+implement these traits. For `#[recallable]` fields, the field's memento type
+(`<FieldType as Recallable>::Memento`) must implement them.
 
 ### `#[derive(Recall)]`
 
@@ -298,7 +339,7 @@ Derives the `Recall` trait implementation for a struct.
 **Requirements:**
 
 - Must be applied to a struct (not enums or unions)
-- Does not support lifetime parameters (borrowed fields)
+- Does not support lifetime-parameterized structs
 - Works with named, unnamed (tuple), and unit structs
 - The target type must implement `Recallable` (derive it or implement manually)
 

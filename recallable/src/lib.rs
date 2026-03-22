@@ -104,6 +104,42 @@ pub trait Recallable {
 }
 
 /// A type that can change state by absorbing one companion memento value.
+///
+/// # Example
+///
+/// ```rust
+/// use recallable::{Recall, Recallable};
+///
+/// struct Settings {
+///     volume: u32,
+///     brightness: u32,
+/// }
+///
+/// #[derive(Clone, Debug, PartialEq)]
+/// struct SettingsMemento {
+///     volume: u32,
+///     brightness: u32,
+/// }
+///
+/// impl Recallable for Settings {
+///     type Memento = SettingsMemento;
+/// }
+///
+/// impl Recall for Settings {
+///     fn recall(&mut self, memento: Self::Memento) {
+///         self.volume = memento.volume;
+///         self.brightness = memento.brightness;
+///     }
+/// }
+///
+/// fn main() {
+///    let mut settings = Settings { volume: 50, brightness: 70 };
+///    let memento = SettingsMemento { volume: 80, brightness: 40 };
+///    settings.recall(memento);
+///    assert_eq!(settings.volume, 80);
+///    assert_eq!(settings.brightness, 40);
+/// }
+/// ```
 pub trait Recall: Recallable {
     /// Applies the given memento to update the structure.
     fn recall(&mut self, memento: Self::Memento);
