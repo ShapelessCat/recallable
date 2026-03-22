@@ -30,6 +30,9 @@ describe what the code does. The issues fall into three categories:
 These critique items require code changes and are out of scope:
 
 - Error message in `context.rs:99` ("borrowed fields" → "lifetime-parameterized structs")
+  **Known inconsistency:** after this spec, the README and doc comments will say
+  "lifetime-parameterized structs" but the compiler error will still say "borrowed fields."
+  This is a single-line string change and should be addressed as a follow-up.
 - `#[inline(always)]` → `#[inline]` in generated code
 - `.gitignore` / `.vscode/settings.json` cleanup
 - `dependabot.yaml` cargo ecosystem addition
@@ -97,8 +100,11 @@ This section consolidates constraints that are currently scattered or missing. C
    `Option<T>`, `Vec<T>`, and associated types like `<T as Trait>::Assoc` are rejected.
 4. **Implicit trait requirements on field types** — the generated memento struct derives
    `Clone`, `Debug`, and `PartialEq` (and `Deserialize` when the `serde` feature is
-   enabled). All non-skipped field types must implement these traits, or compilation will
-   fail with an error pointing at generated code. *(Currently undocumented anywhere.)*
+   enabled). For regular fields, the field type itself must implement these traits. For
+   `#[recallable]` fields, it is the field's *memento type*
+   (`<FieldType as Recallable>::Memento`) that must implement them. If any required trait
+   is missing, compilation fails with an error pointing at generated code.
+   *(Currently undocumented anywhere.)*
 5. **`#[recallable_model]` attribute ordering** — must appear *before* any attributes it
    needs to inspect (e.g., before `#[derive(Serialize)]`). Attribute macros only see
    attributes that follow them in source order. *(Currently documented only in CLAUDE.md.)*
@@ -223,7 +229,10 @@ The `Recallable` trait has a doc example (lines 22-98). The `TryRecall` trait ha
 example (lines 117-175). The `Recall` trait (lines 106-110) has only a one-line doc comment
 and no example.
 
-Add a short doc example showing basic usage:
+Add a short doc example showing basic usage. The example uses a manual memento struct
+and manual `Recallable` impl (consistent with the existing `Recallable` and `TryRecall`
+doc examples), because the generated memento's fields are private and cannot be
+constructed via struct literal from user code.
 
 ```rust
 /// A type that can change state by absorbing one companion memento value.
@@ -233,21 +242,38 @@ Add a short doc example showing basic usage:
 /// ```rust
 /// use recallable::{Recall, Recallable};
 ///
-/// #[derive(Clone, Debug, PartialEq, Recallable, Recall)]
-/// struct Counter {
-///     count: u32,
-///     label: String,
+/// struct Settings {
+///     volume: u32,
+///     brightness: u32,
 /// }
 ///
-/// let mut counter = Counter { count: 0, label: "hits".into() };
-/// let memento = <Counter as Recallable>::Memento { count: 42, label: "visits".into() };
-/// counter.recall(memento);
-/// assert_eq!(counter.count, 42);
-/// assert_eq!(counter.label, "visits");
+/// #[derive(Clone, Debug, PartialEq)]
+/// struct SettingsMemento {
+///     volume: u32,
+///     brightness: u32,
+/// }
+///
+/// impl Recallable for Settings {
+///     type Memento = SettingsMemento;
+/// }
+///
+/// impl Recall for Settings {
+///     fn recall(&mut self, memento: Self::Memento) {
+///         self.volume = memento.volume;
+///         self.brightness = memento.brightness;
+///     }
+/// }
+///
+/// let mut settings = Settings { volume: 50, brightness: 70 };
+/// let memento = SettingsMemento { volume: 80, brightness: 40 };
+/// settings.recall(memento);
+/// assert_eq!(settings.volume, 80);
+/// assert_eq!(settings.brightness, 40);
 /// ```
 ```
 
 Note: this example does NOT use serde, so it works with `--no-default-features`.
+The manual implementation mirrors what `#[derive(Recall)]` generates.
 
 ---
 
