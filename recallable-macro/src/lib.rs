@@ -42,6 +42,11 @@ const IS_IMPL_FROM_ENABLED: bool = cfg!(feature = "impl_from");
 ///   to keep serde output aligned with recalling behavior.
 ///
 /// This macro preserves the original struct shape and only mutates attributes.
+///
+/// **Attribute ordering:** This macro must appear *before* any attributes it needs
+/// to inspect. An attribute macro only receives attributes that follow it in source
+/// order. For example, `#[derive(Serialize)]` placed above `#[recallable_model]` is
+/// invisible to the macro and will cause a duplicate-derive error.
 pub fn recallable_model(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let crate_path = crate_path();
     let mut input = parse_macro_input!(item as ItemStruct);
@@ -83,6 +88,10 @@ pub fn recallable_model(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// The `Recallable` impl sets `type Memento` to that generated type and adds any required generic
 /// bounds.
+///
+/// The generated memento struct always derives `Clone`, `Debug`, and `PartialEq`.
+/// When the `serde` feature is enabled, it also derives `serde::Deserialize`.
+/// All non-skipped field types must implement these traits.
 ///
 /// When the `impl_from` feature is enabled for the macro crate, a
 /// `From<Struct>` implementation is also generated for the memento type.
