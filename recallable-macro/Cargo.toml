@@ -21,5 +21,5 @@ impl_from = []
 [dependencies]
 proc-macro-crate = "3.5.0"
 proc-macro2 = "1.0.105"
-quote = "1.0.43"
+quote = "1.0.45"
 syn = { version = "2.0.114", features = ["full", "visit", "extra-traits"] }
