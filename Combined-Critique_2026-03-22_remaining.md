@@ -18,30 +18,7 @@ Only open and partially-addressed (⚠️) items remain.
 
 ## 3. Generic and Lifetime Constraints
 
-### 3.2. Lifetime Rejection Is Broader Than Documented
-
-⚠️ **Partially fixed.** README and doc comments now say "lifetime-parameterized
-structs." The compiler error message in `context.rs:99` still says "borrowed
-fields" (code change, to be addressed separately).
-
-**Raised by:** Codex, Claude (Gemini notes it as a constraint)
-
-The `validate_generics` function rejects any struct with *any* lifetime
-parameter — not just structs with borrowed fields. The error message says
-"Recall derives do not support borrowed fields," which is misleading. A
-struct like `Foo<'a> { data: PhantomData<&'a ()> }` contains no borrowed
-runtime data but is still rejected.
-
-Codex confirmed this with a throwaway crate. All documentation
-(`README.md:238`, `README.md:291-302`, the compiler error text) conflates
-"borrowed fields" with "lifetime-parameterized structs."
-
-**Recommendation (Codex, Claude):** Change the error message to "Recall
-derives do not support lifetime-parameterized structs" and update the README
-to match, unless the implementation is broadened to only reject actual borrow
-types.
-
-### 3.3. Enum and Union Support
+### 3.2. Enum and Union Support
 
 **Raised by:** Gemini
 
@@ -81,24 +58,21 @@ problems:
 traits. At minimum, document the implicit `Clone`/`Debug`/`PartialEq`
 requirements prominently.
 
----
-
-## 5. `#[recallable_model]` and Serde Coupling
-
-### 5.3. Asymmetric Serialization Design
-
-**Raised by:** Gemini (positive), Claude (cautious)
-
-The generated memento derives `Deserialize` but not `Serialize`. Gemini views
-this as a smart design choice aligned with durable-execution use cases. Claude
-agrees it is intentional but flags the structural coupling risk described
-above.
+**Naming note:** `memento_derive(...)` and `memento_attr(...)` are proposal
+spellings from the critique reports themselves, not names borrowed from one
+canonical proc-macro crate. Gemini suggested both forms; Claude explicitly
+proposed `memento_derive(...)`. The closest widely used precedents are
+`derive_builder` (`#[builder(derive(...))]` plus `#[builder_struct_attr(...)]`
+and related `*_attr` hooks) and `typed-builder`
+(`#[builder(builder_type(attributes(...)))]`). More broadly, the outer
+`#[recallable(...)]` shape follows the same Rust derive-helper pattern used by
+crates such as Serde and Strum.
 
 ---
 
-## 6. Documentation and Onboarding
+## 5. Documentation and Onboarding
 
-### 6.4. Missing Examples Directory
+### 5.1. Missing Examples Directory
 
 ⚠️ **Partially fixed.** The commented-out "Running Examples" TODO block in
 `CONTRIBUTING.md` has been removed. The `examples/` directory itself is still
@@ -110,20 +84,11 @@ There is no `examples/` directory. `CONTRIBUTING.md:33-39` contains a
 commented-out "Running Examples" section with a TODO. For a proc-macro crate,
 standalone runnable examples are one of the most effective onboarding tools.
 
-### 6.6. Memento Type Alias Ergonomics
-
-**Raised by:** Gemini
-
-The `<Struct as Recallable>::Memento` syntax is verbose. Providing
-documentation hints or examples showing how to create type aliases
-(e.g., `type MyMemento = <MyStruct as Recallable>::Memento;`) would reduce
-friction.
-
 ---
 
-## 7. Testing
+## 6. Testing
 
-### 7.3. Missing Runtime Edge-Case Tests
+### 6.1. Missing Runtime Edge-Case Tests
 
 **Raised by:** Claude only
 
@@ -131,18 +96,20 @@ No tests cover runtime edge cases like deserialization from malformed data or
 field reordering between serialization and deserialization. These are the
 scenarios most likely to bite users of a persistence-focused library.
 
-### 7.4. Minimal Doc Tests
+### 6.2. Dedicated Field-Attribute Doc Tests Still Missing
 
-⚠️ **Partially fixed.** A doc example has been added to the `Recall` trait
-(3 doc tests now exist: `Recallable`, `Recall`, `TryRecall`). The
-`recallable_model` macro and field-level attributes still have no doc tests.
+⚠️ **Partially fixed.** Doc tests now exist for `Recallable`, `Recall`,
+`TryRecall`, `recallable_model`, and the `Recallable`/`Recall` derive macro
+re-exports. Dedicated doc tests for the field-level `#[recallable]` and
+`#[recallable(skip)]` attributes still do not exist.
 
 **Raised by:** Claude only
 
-Only two doc tests exist (on `Recallable` and `TryRecall`). The `Recall`
-trait, `recallable_model` macro, and field-level attributes have no doc tests.
+Doc coverage is materially better than it was originally, but the field-level
+attributes still lack focused doctest coverage. Their behavior is only exercised
+indirectly inside broader examples.
 
-### 7.5. No Property-Based or Fuzz Testing
+### 6.3. No Property-Based or Fuzz Testing
 
 **Raised by:** Claude only
 
@@ -152,32 +119,9 @@ add significant confidence.
 
 ---
 
-## 8. Project Hygiene
+## 7. Code-Level Observations
 
-### 8.1. Editor Configuration Committed
-
-**Raised by:** Codex, Claude
-
-`.vscode/settings.json` is tracked in git (containing only file associations
-for license files). The `.gitignore` excludes `.idea/` but not `.vscode/`,
-which is inconsistent.
-
-**Recommendation:** Either commit both editor configs intentionally or ignore
-both.
-
-### 8.2. Dependabot Scope
-
-**Raised by:** Claude only
-
-The `dependabot.yaml` covers `github-actions` updates but not Cargo
-dependencies. For a crate with pinned `proc-macro2`, `syn`, `quote`, and
-`proc-macro-crate` versions, automated dependency updates would be valuable.
-
----
-
-## 9. Code-Level Observations
-
-### 9.1. `HashMap` Non-Deterministic Iteration
+### 7.1. `HashMap` Non-Deterministic Iteration
 
 **Raised by:** Claude only
 
@@ -187,7 +131,7 @@ dependencies. For a crate with pinned `proc-macro2`, `syn`, `quote`, and
 order and only checks membership, but fragile if the iteration pattern ever
 changes.
 
-### 9.2. `SimpleTypeCollector` Over-Collects
+### 7.2. `SimpleTypeCollector` Over-Collects
 
 **Raised by:** Claude only
 
@@ -197,25 +141,9 @@ collects the first segment of every `TypePath`. For a type like
 it collects `std`, `K`, and `V`. The `std` entry is harmless but the
 over-collection is semantically sloppy.
 
-### 9.3. `#[inline(always)]` on Generated Methods
-
-**Raised by:** Claude only
-
-Both the generated `recall` method and the blanket `TryRecall::try_recall`
-are marked `#[inline(always)]`. For structs with many fields, forced inlining
-could cause code bloat. `#[inline]` (without `always`) would let the compiler
-decide.
-
 ---
 
-## 10. Prioritized Recommendations
-
-### High Priority
-
-1. ⚠️ Fix lifetime error message: "lifetime-parameterized structs"
-   not "borrowed fields." (README and doc comments fixed; compiler
-   error message in `context.rs:99` still says "borrowed fields")
-   *— Codex, Claude*
+## 8. Prioritized Recommendations
 
 ### Medium Priority
 
@@ -225,40 +153,32 @@ decide.
 2. ⚠️ Create `examples/` directory with runnable examples.
    (CONTRIBUTING.md TODO block removed; directory not yet created)
    *— Gemini, Codex, Claude*
-3. Stop tracking `.vscode/settings.json` or add `.vscode/` to
-   `.gitignore`.
-   *— Codex, Claude*
-4. Enhance generic container support (`Option<T>`, `Vec<T>`).
+3. Enhance generic container support (`Option<T>`, `Vec<T>`).
    *— Gemini, Claude*
-5. Investigate enum support.
+4. Investigate enum support.
    *— Gemini*
 
 ### Low Priority
 
-1. Consider `#[inline]` instead of `#[inline(always)]` for
-   generated methods.
-   *— Claude*
-2. Add property-based round-trip tests for serialization
+1. Add property-based round-trip tests for serialization
    invariants.
    *— Claude*
-3. ⚠️ Expand doc tests to cover `recallable_model` and
-   field attributes. (`Recall` doc test added; `recallable_model`
-   and field attributes still missing)
+2. ⚠️ Add dedicated doc tests for field-level attributes.
+   (`recallable_model` and trait/macro docs are now covered; field-level
+   `#[recallable]` and `#[recallable(skip)]` doctests are still missing)
    *— Claude*
-4. Consider supporting `Option<T>` for partial-update semantics.
+3. Consider supporting `Option<T>` for partial-update semantics.
    *— Claude*
-5. Add `cargo` ecosystem to dependabot configuration.
-   *— Claude*
-6. Document memento type-alias pattern to reduce verbosity of
+4. Document memento type-alias pattern to reduce verbosity of
    `<T as Recallable>::Memento`.
    *— Gemini*
-7. Extract CI coverage logic from inline shell into a
+5. Extract CI coverage logic from inline shell into a
    maintainable script.
    *— Claude*
 
 ---
 
-## 11. Summary
+## 9. Summary
 
 ### What All Three Agree On
 
@@ -266,12 +186,9 @@ decide.
    structure, strong CI, broad test coverage, no bugs found.
 2. ⚠️ Hardcoded memento derives create hidden requirements and prevent
    customization. (Requirements now documented; customization still missing.)
-3. ⚠️ Lifetime error messaging conflates "borrowed fields" with
-   "lifetime-parameterized structs." (Documentation fixed; compiler error
-   message still says "borrowed fields.")
-4. ⚠️ There is no `examples/` directory. (CONTRIBUTING.md TODO removed;
+3. ⚠️ There is no `examples/` directory. (CONTRIBUTING.md TODO removed;
    directory not yet created.)
-5. The crate is promising but not yet ready for broad public adoption.
+4. The crate is promising but not yet ready for broad public adoption.
 
 ### The Core Tension
 
