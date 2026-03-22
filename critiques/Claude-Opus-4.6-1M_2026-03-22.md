@@ -142,6 +142,18 @@ top of the README.
 
 ## 3. `#[recallable_model]` and Serde Coupling
 
+> **Author response:** This section's concerns are largely addressed by design intent.
+>
+> - "Users cannot opt out" is incorrect — disabling the `serde` feature opts out of all
+>   serde behavior entirely.
+> - `#[recallable_model]` is the convenience macro for simple use cases; no manual serde
+>   attributes should be needed. For complex serde customization, the intended path is to
+>   implement `Recallable`/`Recall`/`TryRecall` manually with a hand-written memento struct.
+> - The structural mirroring between the original struct and its memento (minus skipped
+>   fields) is by design, not an accidental coupling. Serde attribute forwarding is a
+>   non-goal.
+> - Attribute ordering is now documented in the README and CLAUDE.md.
+
 ### 3.1. Implicit Attribute Mutation
 
 `#[recallable_model]` does more than inject derives. When the `serde` feature is
