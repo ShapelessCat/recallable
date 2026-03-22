@@ -88,7 +88,7 @@ the examples:
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 postcard = "1"
-heapless = "0.8"
+heapless = "0.9.2"
 ```
 
 ## Requirements & Limitations

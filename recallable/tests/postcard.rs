@@ -21,7 +21,12 @@ fn encode_postcard<T>(value: &T) -> PostcardBytes
 where
     T: Serialize,
 {
-    postcard::to_vec::<_, POSTCARD_CAPACITY>(value).unwrap()
+    let bytes = postcard::to_vec::<_, POSTCARD_CAPACITY>(value).unwrap();
+    let mut encoded = PostcardBytes::new();
+    for byte in bytes {
+        encoded.push(byte).unwrap();
+    }
+    encoded
 }
 
 #[test]
