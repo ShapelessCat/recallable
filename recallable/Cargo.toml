@@ -49,3 +49,22 @@ required-features = ["serde"]
 [[test]]
 name = "impl_from"
 required-features = ["impl_from"]
+
+[[example]]
+name = "basic_model"
+required-features = ["serde"]
+
+[[example]]
+name = "nested_generic"
+required-features = ["serde"]
+
+[[example]]
+name = "postcard_roundtrip"
+required-features = ["serde"]
+
+[[example]]
+name = "manual_no_serde"
+
+[[example]]
+name = "impl_from_roundtrip"
+required-features = ["impl_from"]

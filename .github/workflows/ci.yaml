@@ -37,14 +37,29 @@ jobs:
       - name: Run tests with default features (support serde)
         run: cargo test --verbose --package recallable
 
+      - name: Run default-feature examples
+        run: |
+          cargo run --verbose --package recallable --example basic_model
+          cargo run --verbose --package recallable --example nested_generic
+          cargo run --verbose --package recallable --example postcard_roundtrip
+
       - name: Run tests without default feature
         run: cargo test --verbose --package recallable --no-default-features
+
+      - name: Run example without default features
+        run: cargo run --verbose --package recallable --no-default-features --example manual_no_serde
 
       - name: cargo test with feature impl_from
         run: cargo test --verbose --package recallable --features impl_from
 
+      - name: Run impl_from example without default features
+        run: cargo run --verbose --package recallable --no-default-features --features impl_from --example impl_from_roundtrip
+
       - name: Run tests with all features
         run: cargo test --verbose --package recallable --all-features
+
+      - name: Check examples with all features
+        run: cargo check --verbose --package recallable --examples --all-features
 
   msrv:
     runs-on: ubuntu-latest
@@ -63,14 +78,29 @@ jobs:
       - name: Run tests with default features (support serde)
         run: cargo test --verbose --package recallable
 
+      - name: Run default-feature examples
+        run: |
+          cargo run --verbose --package recallable --example basic_model
+          cargo run --verbose --package recallable --example nested_generic
+          cargo run --verbose --package recallable --example postcard_roundtrip
+
       - name: Run tests without default feature
         run: cargo test --verbose --package recallable --no-default-features
+
+      - name: Run example without default features
+        run: cargo run --verbose --package recallable --no-default-features --example manual_no_serde
 
       - name: Run tests with feature impl_from
         run: cargo test --verbose --package recallable --features impl_from
 
+      - name: Run impl_from example without default features
+        run: cargo run --verbose --package recallable --no-default-features --features impl_from --example impl_from_roundtrip
+
       - name: Run tests with all features
         run: cargo test --verbose --package recallable --all-features
+
+      - name: Check examples with all features
+        run: cargo check --verbose --package recallable --examples --all-features
 
   coverage-report:
     runs-on: ubuntu-latest

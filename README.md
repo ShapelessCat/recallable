@@ -38,6 +38,7 @@ The provided procedural macros handle the heavy lifting; they generate companion
 
 - [Features](#features)
 - [Installation](#installation)
+- [Runnable Examples](#runnable-examples)
 - [Requirements & Limitations](#requirements--limitations)
 - [Usage](#usage)
   - [Basic Example](#basic-example)
@@ -89,6 +90,19 @@ the examples:
 serde = { version = "1", features = ["derive"] }
 postcard = "1"
 heapless = "0.9.2"
+```
+
+## Runnable Examples
+
+The repository includes runnable example binaries under `recallable/examples/`.
+Because the workspace root uses a virtual manifest, run them with `-p recallable`:
+
+```bash
+cargo run -p recallable --example basic_model
+cargo run -p recallable --example nested_generic
+cargo run -p recallable --example postcard_roundtrip
+cargo run -p recallable --no-default-features --example manual_no_serde
+cargo run -p recallable --no-default-features --features impl_from --example impl_from_roundtrip
 ```
 
 ## Requirements & Limitations

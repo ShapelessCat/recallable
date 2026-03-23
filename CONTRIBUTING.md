@@ -30,6 +30,18 @@ cargo test --package recallable --features impl_from
 cargo test --package recallable --all-features
 ```
 
+### Running Examples
+
+The runnable example binaries live under `recallable/examples/`:
+
+```bash
+cargo run -p recallable --example basic_model
+cargo run -p recallable --example nested_generic
+cargo run -p recallable --example postcard_roundtrip
+cargo run -p recallable --no-default-features --example manual_no_serde
+cargo run -p recallable --no-default-features --features impl_from --example impl_from_roundtrip
+```
+
 ## Making Changes
 
 ### Code Style
