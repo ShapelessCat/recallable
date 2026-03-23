@@ -1,5 +1,0 @@
-error: Recall derives do not support lifetime-parameterized structs
- --> tests/ui/derive_fail_lifetime_parameterized_struct.rs:4:29
-  |
-4 | struct LifetimeParameterized<'a> {
-  |                             ^^^^

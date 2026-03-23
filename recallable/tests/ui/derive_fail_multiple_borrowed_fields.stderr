@@ -1,0 +1,11 @@
+error: Recall derives do not support borrowed fields
+ --> tests/ui/derive_fail_multiple_borrowed_fields.rs:6:8
+  |
+6 |     a: &'a str,
+  |        ^^^^^^^
+
+error: Recall derives do not support borrowed fields
+ --> tests/ui/derive_fail_multiple_borrowed_fields.rs:7:8
+  |
+7 |     b: Vec<&'a u8>,
+  |        ^^^^^^^^^^^
