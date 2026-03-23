@@ -96,7 +96,7 @@ impl<'a> MacroContext<'a> {
         {
             Err(syn::Error::new_spanned(
                 &input.generics,
-                "Recall derives do not support borrowed fields",
+                "Recall derives do not support lifetime-parameterized structs",
             ))
         } else {
             Ok(())

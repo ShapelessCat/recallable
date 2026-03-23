@@ -1,5 +1,0 @@
-error: Recall derives do not support borrowed fields
- --> tests/ui/derive_fail_borrowed_fields.rs:4:21
-  |
-4 | struct BorrowedValue<'a> {
-  |                     ^^^^
