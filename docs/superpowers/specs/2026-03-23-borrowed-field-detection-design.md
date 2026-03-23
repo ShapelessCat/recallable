@@ -10,24 +10,30 @@ parameters. This is overly broad — structs like `Foo<'a>` with only
 
 Replace the struct-level lifetime rejection with field-level borrowed field
 detection. Only reject fields where a struct lifetime parameter actually appears
-in the field's type, exempting `PhantomData` fields.
+in the field's type, exempting `PhantomData` and `#[recallable(skip)]` fields.
 
 ## Design
 
 ### Validation Logic
 
-Replace `validate_generics` with a new validation function (called from
-`MacroContext::new`):
+Replace `validate_generics` with a new validation function. In
+`MacroContext::new`, this runs after `extract_struct_fields` but before
+`collect_field_actions`, since it needs access to the parsed fields.
 
-1. Collect the set of lifetime parameter idents from `input.generics.params`
-   (e.g., `'a`, `'b`).
+1. Collect the set of lifetime parameter idents from `input.generics.params`.
+   Note: `syn::Lifetime` stores idents *without* the tick — `'a` becomes `Ident("a")`.
 2. If the set is empty, return `Ok(())` immediately.
-3. For each named field in the struct:
-   a. Check if the field's outermost type is `PhantomData` (last segment of a
-      `TypePath` is `PhantomData`). If so, skip it.
-   b. Walk the field's `syn::Type` using a `syn::visit::Visit` impl that looks
+3. For each field (named or unnamed — applies to both regular and tuple structs):
+   a. Call `has_recallable_skip_attr(field)` (the existing public helper that
+      delegates to `determine_field_behavior`). If the field is skipped, skip
+      the borrow check — skipped fields don't appear in the memento, so
+      borrowed data there is harmless. Attribute validation errors are left to
+      `collect_field_actions` which runs later.
+   b. If the field's outermost type is `PhantomData` (last segment of a
+      `TypePath` is `PhantomData`), skip it.
+   c. Walk the field's `syn::Type` using a `syn::visit::Visit` impl that looks
       for `Lifetime` nodes whose ident matches any collected struct lifetime.
-   c. If a match is found, emit `syn::Error` on the field's type span.
+   d. If a match is found, emit `syn::Error` on the field's type span.
 4. Collect all errors and combine them (so the user sees every offending field).
 
 ### Lifetime Visitor
@@ -49,6 +55,9 @@ impl<'ast> Visit<'ast> for LifetimeUsageChecker<'_> {
 }
 ```
 
+The visitor does not short-circuit after `found = true` — this is intentional
+for simplicity. The type trees are small and the cost is negligible.
+
 This is a separate visitor from the existing `SimpleTypeCollector` — they serve
 different purposes (ident collection vs. lifetime presence check) and share no
 logic worth abstracting.
@@ -58,6 +67,17 @@ logic worth abstracting.
 A field is `PhantomData` if its type is a `TypePath` whose last path segment
 ident is `PhantomData`. This handles `PhantomData<...>`,
 `core::marker::PhantomData<...>`, and `std::marker::PhantomData<...>`.
+
+### Generated Code for Passing Structs
+
+When a lifetime-parameterized struct passes validation (e.g., only PhantomData
+uses the lifetime), the generated code works correctly because:
+
+- The memento struct omits lifetime parameters — it only includes type params
+  (existing behavior via `generics.type_params()`).
+- The trait impls use `split_for_impl()` which naturally includes the lifetime:
+  `impl<'a> Recallable for Foo<'a> { type Memento = FooMemento; }` — valid
+  because `FooMemento` simply doesn't reference `'a`.
 
 ### Error Message
 
@@ -77,24 +97,53 @@ struct Foo<'a> {
 }
 ```
 
-### What Fails
+### What Still Fails
 
 ```rust
+// Direct reference
 #[derive(Recallable)]
 struct Bar<'a> {
     name: &'a str,           // error: borrowed field
 }
 
+// Nested reference
 #[derive(Recallable)]
 struct Baz<'a> {
-    data: Vec<&'a u8>,       // error: nested borrowed field
+    data: Vec<&'a u8>,       // error: borrowed field
 }
 
+// Multiple errors reported at once
 #[derive(Recallable)]
 struct Multi<'a> {
     a: &'a str,              // error
     b: Option<&'a u8>,       // error (both reported)
     marker: PhantomData<&'a ()>,  // ok
+}
+
+// Tuple struct
+#[derive(Recallable)]
+struct Wrapper<'a>(&'a str);  // error: borrowed field
+
+// Multiple lifetime parameters
+#[derive(Recallable)]
+struct Multi2<'a, 'b> {
+    x: &'a str,              // error
+    y: &'b str,              // error (both lifetimes checked)
+    marker: PhantomData<&'a ()>,  // ok
+}
+```
+
+### Skipped Fields with Borrows
+
+Skipped fields are exempt from the borrow check. They don't appear in the
+memento, so borrowed data there is harmless:
+
+```rust
+#[derive(Recallable)]
+struct WithSkipped<'a> {
+    #[recallable(skip)]
+    name: &'a str,           // ok — skipped from memento
+    value: u8,
 }
 ```
 
@@ -111,5 +160,4 @@ struct Multi<'a> {
 ## Out of Scope
 
 - Rejecting `'static` lifetimes in field types (these are not struct lifetime params)
-- Changing how `#[recallable(skip)]` interacts with borrowed fields
 - Lifetime elision or inference
