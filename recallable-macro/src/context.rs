@@ -13,7 +13,7 @@ mod recall_impl;
 mod recallable_impl;
 mod utils;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro2::{Span, TokenStream as TokenStream2};
@@ -291,7 +291,7 @@ impl<'a> FieldAction<'a> {
     fn build_field(
         &self,
         recallable_trait: &TokenStream2,
-        generic_type_params: &std::collections::HashSet<&Ident>,
+        generic_type_params: &HashSet<&Ident>,
     ) -> TokenStream2 {
         let member = &self.member;
         let ty = self.ty;
@@ -397,10 +397,7 @@ fn collect_used_simple_types(ty: &Type) -> Vec<&Ident> {
     collector.used_simple_types
 }
 
-fn is_generic_type_param(
-    ty: &Type,
-    generic_type_params: &std::collections::HashSet<&Ident>,
-) -> bool {
+fn is_generic_type_param(ty: &Type, generic_type_params: &HashSet<&Ident>) -> bool {
     match ty {
         Type::Path(tp) if tp.qself.is_none() && tp.path.segments.len() == 1 => {
             let segment = &tp.path.segments[0];
@@ -409,4 +406,38 @@ fn is_generic_type_param(
         }
         _ => false,
     }
+}
+
+struct LifetimeUsageChecker<'a> {
+    struct_lifetimes: &'a HashSet<&'a Ident>,
+    found: bool,
+}
+
+impl<'ast> Visit<'ast> for LifetimeUsageChecker<'_> {
+    fn visit_lifetime(&mut self, lt: &'ast syn::Lifetime) {
+        if self.struct_lifetimes.contains(&lt.ident) {
+            self.found = true;
+        }
+    }
+}
+
+fn is_phantom_data(ty: &Type) -> bool {
+    if let Type::Path(type_path) = ty {
+        type_path
+            .path
+            .segments
+            .last()
+            .is_some_and(|seg| seg.ident == "PhantomData")
+    } else {
+        false
+    }
+}
+
+fn field_uses_struct_lifetime(ty: &Type, struct_lifetimes: &HashSet<&Ident>) -> bool {
+    let mut checker = LifetimeUsageChecker {
+        struct_lifetimes,
+        found: false,
+    };
+    checker.visit_type(ty);
+    checker.found
 }
