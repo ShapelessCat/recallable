@@ -106,7 +106,7 @@ impl<'a> MacroContext<'a> {
             if is_phantom_data(&field.ty) {
                 continue;
             }
-            if field_uses_struct_lifetime(&field.ty, &struct_lifetimes) {
+            if field_uses_struct_lifetime(&field.ty, struct_lifetimes) {
                 let err = syn::Error::new_spanned(
                     &field.ty,
                     "Recall derives do not support borrowed fields",
@@ -146,7 +146,7 @@ impl<'a> MacroContext<'a> {
             Self::collect_field_action(
                 index,
                 field,
-                &struct_lifetimes,
+                struct_lifetimes,
                 &mut preserved_types,
                 &mut field_actions,
             )?;
