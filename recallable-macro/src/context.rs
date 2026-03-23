@@ -66,8 +66,8 @@ pub(crate) struct MacroContext<'a> {
 
 impl<'a> MacroContext<'a> {
     pub(crate) fn new(input: &'a DeriveInput) -> syn::Result<Self> {
-        Self::validate_generics(input)?;
         let fields = Self::extract_struct_fields(input)?;
+        Self::validate_no_borrowed_fields(input, fields)?;
         let (preserved_types, field_actions) = Self::collect_field_actions(fields)?;
         let memento_struct_type =
             Self::build_memento_struct_type(&input.ident, &input.generics, &preserved_types);
@@ -87,19 +87,45 @@ impl<'a> MacroContext<'a> {
         })
     }
 
-    fn validate_generics(input: &DeriveInput) -> syn::Result<()> {
-        if input
+    fn validate_no_borrowed_fields(input: &DeriveInput, fields: &Fields) -> syn::Result<()> {
+        let struct_lifetimes: HashSet<&Ident> = input
             .generics
             .params
             .iter()
-            .any(|g| matches!(g, GenericParam::Lifetime(_)))
-        {
-            Err(syn::Error::new_spanned(
-                &input.generics,
-                "Recall derives do not support lifetime-parameterized structs",
-            ))
-        } else {
-            Ok(())
+            .filter_map(|p| match p {
+                GenericParam::Lifetime(lt) => Some(&lt.lifetime.ident),
+                _ => None,
+            })
+            .collect();
+
+        if struct_lifetimes.is_empty() {
+            return Ok(());
+        }
+
+        let mut errors: Option<syn::Error> = None;
+
+        for field in fields.iter() {
+            if has_recallable_skip_attr(field) {
+                continue;
+            }
+            if is_phantom_data(&field.ty) {
+                continue;
+            }
+            if field_uses_struct_lifetime(&field.ty, &struct_lifetimes) {
+                let err = syn::Error::new_spanned(
+                    &field.ty,
+                    "Recall derives do not support borrowed fields",
+                );
+                match &mut errors {
+                    Some(existing) => existing.combine(err),
+                    None => errors = Some(err),
+                }
+            }
+        }
+
+        match errors {
+            Some(e) => Err(e),
+            None => Ok(()),
         }
     }
 
