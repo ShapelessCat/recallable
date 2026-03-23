@@ -1,3 +1,4 @@
+use proptest::{prelude::*, proptest};
 use recallable::{Recall, Recallable, TryRecall};
 
 mod common;
@@ -194,4 +195,95 @@ fn test_existing_where_clause_without_trailing_comma() {
             inner: Counter { value: 8 },
         }
     );
+}
+
+#[test]
+fn test_malformed_json_is_rejected() {
+    // Reject obviously invalid syntax so arbitrary input cannot be mistaken for
+    // a valid memento.
+    let result = serde_json::from_str::<PropertyOuterMemento>("{ definitely not valid json");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_truncated_json_is_rejected() {
+    // Truncation is a distinct corruption mode from malformed syntax and is
+    // common when persisted output is cut off mid-write.
+    let result = serde_json::from_str::<PropertyOuterMemento>(
+        r#"{"level":7,"threshold":11,"nested":{"enabled":true,"lanes":[1,2"#,
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_json_schema_drift_added_field_is_accepted() {
+    // Serde JSON ignores unknown fields by default. This test locks in that an
+    // older reader can still accept a payload from a newer shape with extras.
+    let payload = serde_json::to_string(&SchemaDriftAddedFieldV2 {
+        id: 7,
+        active: true,
+        revision: 3,
+    })
+    .unwrap();
+
+    let parsed: SchemaDriftV1 = serde_json::from_str(&payload).unwrap();
+    assert_eq!(
+        parsed,
+        SchemaDriftV1 {
+            id: 7,
+            active: true,
+        }
+    );
+}
+
+#[test]
+fn test_json_schema_drift_removed_field_is_rejected() {
+    // Removing a required field is a breaking change for the old reader; this
+    // should fail rather than silently invent a missing value.
+    let payload = serde_json::to_string(&SchemaDriftRemovedFieldV2 { id: 7 }).unwrap();
+    let result = serde_json::from_str::<SchemaDriftV1>(&payload);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_json_schema_drift_renamed_field_is_rejected() {
+    // A rename is also breaking unless aliases are added explicitly, because
+    // the old field name no longer appears in the payload.
+    let payload = serde_json::to_string(&SchemaDriftRenamedFieldV2 {
+        id: 7,
+        is_active: true,
+    })
+    .unwrap();
+    let result = serde_json::from_str::<SchemaDriftV1>(&payload);
+    assert!(result.is_err());
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    #[test]
+    fn property_json_roundtrip_recall_preserves_persisted_state(
+        original in property_outer_strategy(),
+        target_skipped_marker in any::<u8>(),
+    ) {
+        // Check three invariants over many shapes:
+        // 1. persisted scalar fields survive serialize/deserialize/recall,
+        // 2. nested #[recallable] fields round-trip as nested mementos,
+        // 3. #[recallable(skip)] fields keep the target's existing value.
+        let payload = serde_json::to_string(&original).unwrap();
+        let memento: PropertyOuterMemento = serde_json::from_str(&payload).unwrap();
+        let inspectable: InspectablePropertyOuterMemento = serde_json::from_str(&payload).unwrap();
+        let expected_nested: PropertyInnerMemento =
+            serde_json::from_str(&serde_json::to_string(&original.nested).unwrap()).unwrap();
+
+        prop_assert_eq!(inspectable.nested, expected_nested);
+
+        let mut target = property_seed(target_skipped_marker);
+        target.recall(memento);
+
+        prop_assert_eq!(target.level, original.level);
+        prop_assert_eq!(target.threshold, original.threshold);
+        prop_assert_eq!(target.nested, original.nested);
+        prop_assert_eq!(target.skipped_marker, target_skipped_marker);
+    }
 }
