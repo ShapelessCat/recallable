@@ -2,6 +2,9 @@
 .vscode/
 
 target/
+fuzz/artifacts/
+fuzz/coverage/
+fuzz/target/
 
 # macOS specific
 .DS_Store
