@@ -31,7 +31,21 @@ To:
 use std::collections::{HashMap, HashSet};
 ```
 
-- [ ] **Step 2: Add the `LifetimeUsageChecker` struct and `Visit` impl**
+- [ ] **Step 2: Update existing `is_generic_type_param` to use unqualified `HashSet`**
+
+Change line 402 from:
+
+```rust
+    generic_type_params: &std::collections::HashSet<&Ident>,
+```
+
+To:
+
+```rust
+    generic_type_params: &HashSet<&Ident>,
+```
+
+- [ ] **Step 3: Add the `LifetimeUsageChecker` struct and `Visit` impl**
 
 Add after the `is_generic_type_param` function (line 412):
 
@@ -50,7 +64,7 @@ impl<'ast> Visit<'ast> for LifetimeUsageChecker<'_> {
 }
 ```
 
-- [ ] **Step 2: Add the `is_phantom_data` helper function**
+- [ ] **Step 4: Add the `is_phantom_data` helper function**
 
 Add after `LifetimeUsageChecker`:
 
@@ -68,7 +82,7 @@ fn is_phantom_data(ty: &Type) -> bool {
 }
 ```
 
-- [ ] **Step 3: Add a `field_uses_struct_lifetime` helper**
+- [ ] **Step 5: Add a `field_uses_struct_lifetime` helper**
 
 Add after `is_phantom_data`:
 
@@ -86,12 +100,12 @@ fn field_uses_struct_lifetime(
 }
 ```
 
-- [ ] **Step 4: Verify it compiles**
+- [ ] **Step 6: Verify it compiles**
 
 Run: `cargo build --package recallable-macro`
 Expected: compiles (new code is unused for now)
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add recallable-macro/src/context.rs
