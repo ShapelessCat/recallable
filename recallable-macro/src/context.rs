@@ -67,9 +67,10 @@ pub(crate) struct MacroContext<'a> {
 impl<'a> MacroContext<'a> {
     pub(crate) fn new(input: &'a DeriveInput) -> syn::Result<Self> {
         let fields = Self::extract_struct_fields(input)?;
-        Self::validate_no_borrowed_fields(input, fields)?;
+        let struct_lifetimes = collect_struct_lifetimes(&input.generics);
+        Self::validate_no_borrowed_fields(fields, &struct_lifetimes)?;
         let (preserved_types, field_actions) =
-            Self::collect_field_actions(fields, &input.generics)?;
+            Self::collect_field_actions(fields, &struct_lifetimes)?;
         let memento_struct_type =
             Self::build_memento_struct_type(&input.ident, &input.generics, &preserved_types);
         let crate_path = crate_path();
@@ -88,17 +89,10 @@ impl<'a> MacroContext<'a> {
         })
     }
 
-    fn validate_no_borrowed_fields(input: &DeriveInput, fields: &Fields) -> syn::Result<()> {
-        let struct_lifetimes: HashSet<&Ident> = input
-            .generics
-            .params
-            .iter()
-            .filter_map(|p| match p {
-                GenericParam::Lifetime(lt) => Some(&lt.lifetime.ident),
-                _ => None,
-            })
-            .collect();
-
+    fn validate_no_borrowed_fields(
+        fields: &Fields,
+        struct_lifetimes: &HashSet<&Ident>,
+    ) -> syn::Result<()> {
         if struct_lifetimes.is_empty() {
             return Ok(());
         }
@@ -143,17 +137,8 @@ impl<'a> MacroContext<'a> {
 
     fn collect_field_actions(
         fields: &'a Fields,
-        generics: &'a Generics,
+        struct_lifetimes: &HashSet<&'a Ident>,
     ) -> syn::Result<(HashMap<&'a Ident, TypeUsage>, Vec<FieldAction<'a>>)> {
-        let struct_lifetimes: HashSet<&Ident> = generics
-            .params
-            .iter()
-            .filter_map(|p| match p {
-                GenericParam::Lifetime(lt) => Some(&lt.lifetime.ident),
-                _ => None,
-            })
-            .collect();
-
         let mut preserved_types = HashMap::new();
         let mut field_actions = Vec::with_capacity(fields.len());
 
@@ -455,6 +440,17 @@ fn is_generic_type_param(ty: &Type, generic_type_params: &HashSet<&Ident>) -> bo
         }
         _ => false,
     }
+}
+
+fn collect_struct_lifetimes(generics: &Generics) -> HashSet<&Ident> {
+    generics
+        .params
+        .iter()
+        .filter_map(|p| match p {
+            GenericParam::Lifetime(lt) => Some(&lt.lifetime.ident),
+            _ => None,
+        })
+        .collect()
 }
 
 struct LifetimeUsageChecker<'a> {
