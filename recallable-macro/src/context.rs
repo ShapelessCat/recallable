@@ -68,7 +68,8 @@ impl<'a> MacroContext<'a> {
     pub(crate) fn new(input: &'a DeriveInput) -> syn::Result<Self> {
         let fields = Self::extract_struct_fields(input)?;
         Self::validate_no_borrowed_fields(input, fields)?;
-        let (preserved_types, field_actions) = Self::collect_field_actions(fields)?;
+        let (preserved_types, field_actions) =
+            Self::collect_field_actions(fields, &input.generics)?;
         let memento_struct_type =
             Self::build_memento_struct_type(&input.ident, &input.generics, &preserved_types);
         let crate_path = crate_path();
@@ -142,12 +143,28 @@ impl<'a> MacroContext<'a> {
 
     fn collect_field_actions(
         fields: &'a Fields,
+        generics: &'a Generics,
     ) -> syn::Result<(HashMap<&'a Ident, TypeUsage>, Vec<FieldAction<'a>>)> {
+        let struct_lifetimes: HashSet<&Ident> = generics
+            .params
+            .iter()
+            .filter_map(|p| match p {
+                GenericParam::Lifetime(lt) => Some(&lt.lifetime.ident),
+                _ => None,
+            })
+            .collect();
+
         let mut preserved_types = HashMap::new();
         let mut field_actions = Vec::with_capacity(fields.len());
 
         for (index, field) in fields.iter().enumerate() {
-            Self::collect_field_action(index, field, &mut preserved_types, &mut field_actions)?;
+            Self::collect_field_action(
+                index,
+                field,
+                &struct_lifetimes,
+                &mut preserved_types,
+                &mut field_actions,
+            )?;
         }
 
         Ok((preserved_types, field_actions))
@@ -156,9 +173,15 @@ impl<'a> MacroContext<'a> {
     fn collect_field_action(
         index: usize,
         field: &'a Field,
+        struct_lifetimes: &HashSet<&Ident>,
         preserved_types: &mut HashMap<&'a Ident, TypeUsage>,
         field_actions: &mut Vec<FieldAction<'a>>,
     ) -> syn::Result<()> {
+        if is_phantom_data(&field.ty) && field_uses_struct_lifetime(&field.ty, struct_lifetimes) {
+            // Auto-skip: PhantomData fields referencing struct lifetimes cannot
+            // appear in the memento (which omits lifetime parameters).
+            return Ok(());
+        }
         if let Some(field_behavior) = Self::determine_field_behavior(field)? {
             let member = Self::field_member(field, index);
             let field_type = &field.ty;
