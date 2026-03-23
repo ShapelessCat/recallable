@@ -62,17 +62,28 @@ This is a separate visitor from the existing `SimpleTypeCollector` — they serv
 different purposes (ident collection vs. lifetime presence check) and share no
 logic worth abstracting.
 
-### PhantomData Detection
+### PhantomData Detection and Auto-Skip
 
 A field is `PhantomData` if its type is a `TypePath` whose last path segment
 ident is `PhantomData`. This handles `PhantomData<...>`,
 `core::marker::PhantomData<...>`, and `std::marker::PhantomData<...>`.
+
+PhantomData fields that use struct lifetime parameters are automatically skipped
+from the memento (treated as implicit `#[recallable(skip)]`). This is necessary
+because the memento struct omits lifetime parameters — including
+`PhantomData<&'a ()>` in the memento would produce invalid code.
+
+The auto-skip applies in `collect_field_actions`: when processing a field, if it
+is `PhantomData` and its type references any struct lifetime parameter (checked
+via `LifetimeUsageChecker`), treat it as skipped (do not add it to
+`field_actions`).
 
 ### Generated Code for Passing Structs
 
 When a lifetime-parameterized struct passes validation (e.g., only PhantomData
 uses the lifetime), the generated code works correctly because:
 
+- PhantomData fields with struct lifetimes are auto-skipped from the memento.
 - The memento struct omits lifetime parameters — it only includes type params
   (existing behavior via `generics.type_params()`).
 - The trait impls use `split_for_impl()` which naturally includes the lifetime:
