@@ -17,13 +17,27 @@
 **Files:**
 - Modify: `recallable-macro/src/context.rs` (add after `is_generic_type_param` ending at line 412)
 
-- [ ] **Step 1: Add the `LifetimeUsageChecker` struct and `Visit` impl**
+- [ ] **Step 1: Add `HashSet` to the imports**
+
+Change line 16 from:
+
+```rust
+use std::collections::HashMap;
+```
+
+To:
+
+```rust
+use std::collections::{HashMap, HashSet};
+```
+
+- [ ] **Step 2: Add the `LifetimeUsageChecker` struct and `Visit` impl**
 
 Add after the `is_generic_type_param` function (line 412):
 
 ```rust
 struct LifetimeUsageChecker<'a> {
-    struct_lifetimes: &'a std::collections::HashSet<&'a Ident>,
+    struct_lifetimes: &'a HashSet<&'a Ident>,
     found: bool,
 }
 
@@ -61,7 +75,7 @@ Add after `is_phantom_data`:
 ```rust
 fn field_uses_struct_lifetime(
     ty: &Type,
-    struct_lifetimes: &std::collections::HashSet<&Ident>,
+    struct_lifetimes: &HashSet<&Ident>,
 ) -> bool {
     let mut checker = LifetimeUsageChecker {
         struct_lifetimes,
@@ -97,7 +111,7 @@ Replace the `validate_generics` associated function (lines 90-104 inside `impl<'
 
 ```rust
 fn validate_no_borrowed_fields(input: &DeriveInput, fields: &Fields) -> syn::Result<()> {
-    let struct_lifetimes: std::collections::HashSet<&Ident> = input
+    let struct_lifetimes: HashSet<&Ident> = input
         .generics
         .params
         .iter()
@@ -187,7 +201,7 @@ fn collect_field_actions(
     fields: &'a Fields,
     generics: &'a Generics,
 ) -> syn::Result<(HashMap<&'a Ident, TypeUsage>, Vec<FieldAction<'a>>)> {
-    let struct_lifetimes: std::collections::HashSet<&Ident> = generics
+    let struct_lifetimes: HashSet<&Ident> = generics
         .params
         .iter()
         .filter_map(|p| match p {
@@ -221,7 +235,7 @@ Change `collect_field_action` (lines 130-158) to accept the lifetime set and ski
 fn collect_field_action(
     index: usize,
     field: &'a Field,
-    struct_lifetimes: &std::collections::HashSet<&Ident>,
+    struct_lifetimes: &HashSet<&Ident>,
     preserved_types: &mut HashMap<&'a Ident, TypeUsage>,
     field_actions: &mut Vec<FieldAction<'a>>,
 ) -> syn::Result<()> {
@@ -285,11 +299,14 @@ git commit -m "feat: auto-skip PhantomData fields with struct lifetimes from mem
 
 **Files:**
 - Create: `recallable/tests/ui/derive_fail_borrowed_fields.rs`
+- Create: `recallable/tests/ui/derive_fail_borrowed_fields.stderr`
+- Create: `recallable/tests/ui/derive_fail_multiple_borrowed_fields.rs`
+- Create: `recallable/tests/ui/derive_fail_multiple_borrowed_fields.stderr`
 - Delete: `recallable/tests/ui/derive_fail_lifetime_parameterized_struct.rs`
 - Delete: `recallable/tests/ui/derive_fail_lifetime_parameterized_struct.stderr`
 - Modify: `recallable/tests/macro_expansion_failures.rs:4`
 
-- [ ] **Step 1: Create the new compile-fail test file**
+- [ ] **Step 1: Create the single-field compile-fail test**
 
 Write `recallable/tests/ui/derive_fail_borrowed_fields.rs`:
 
@@ -304,7 +321,27 @@ struct BorrowedValue<'a> {
 fn main() {}
 ```
 
-- [ ] **Step 2: Update `macro_expansion_failures.rs`**
+- [ ] **Step 2: Create the multi-field compile-fail test**
+
+This validates that multiple borrowed fields each produce their own error (error-combining logic).
+
+Write `recallable/tests/ui/derive_fail_multiple_borrowed_fields.rs`:
+
+```rust
+use core::marker::PhantomData;
+use recallable::Recallable;
+
+#[derive(Recallable)]
+struct MultiBorrowed<'a> {
+    a: &'a str,
+    b: Vec<&'a u8>,
+    marker: PhantomData<&'a ()>,
+}
+
+fn main() {}
+```
+
+- [ ] **Step 3: Update `macro_expansion_failures.rs`**
 
 Change line 4 from:
 
@@ -316,43 +353,38 @@ To:
 
 ```rust
     tests.compile_fail("tests/ui/derive_fail_borrowed_fields.rs");
+    tests.compile_fail("tests/ui/derive_fail_multiple_borrowed_fields.rs");
 ```
 
-- [ ] **Step 3: Delete the old test files**
+- [ ] **Step 4: Delete the old test files**
 
 ```bash
 rm recallable/tests/ui/derive_fail_lifetime_parameterized_struct.rs
 rm recallable/tests/ui/derive_fail_lifetime_parameterized_struct.stderr
 ```
 
-- [ ] **Step 4: Write the expected `.stderr` file**
+- [ ] **Step 5: Generate the `.stderr` files**
 
-Write `recallable/tests/ui/derive_fail_borrowed_fields.stderr`:
-
-```
-error: Recall derives do not support borrowed fields
- --> tests/ui/derive_fail_borrowed_fields.rs:5:12
-  |
-5 |     value: &'a str,
-  |            ^^^^^^^
-```
-
-Note: The exact column and span may differ. If the test fails, use `TRYBUILD=overwrite` to regenerate:
+Use `TRYBUILD=overwrite` to capture the exact compiler output:
 
 ```bash
 TRYBUILD=overwrite cargo test --package recallable --test macro_expansion_failures
 ```
 
-- [ ] **Step 5: Run the compile-fail tests**
+Verify the generated `.stderr` files contain the expected errors:
+- `derive_fail_borrowed_fields.stderr`: one error on `&'a str`
+- `derive_fail_multiple_borrowed_fields.stderr`: two errors — one on `&'a str`, one on `Vec<&'a u8>`. The `PhantomData` field should NOT produce an error.
+
+- [ ] **Step 6: Run the compile-fail tests**
 
 Run: `cargo test --package recallable --test macro_expansion_failures`
 Expected: all compile-fail tests pass
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add -A recallable/tests/
-git commit -m "test: update compile-fail test for borrowed field detection"
+git commit -m "test: update compile-fail tests for borrowed field detection"
 ```
 
 ---
