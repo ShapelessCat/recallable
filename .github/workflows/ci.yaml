@@ -104,6 +104,10 @@ jobs:
 
   coverage-report:
     runs-on: ubuntu-latest
+    outputs:
+      current_function_coverage: ${{ steps.coverage-metrics.outputs.current_function_coverage }}
+      current_line_coverage: ${{ steps.coverage-metrics.outputs.current_line_coverage }}
+      current_region_coverage: ${{ steps.coverage-metrics.outputs.current_region_coverage }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -131,15 +135,31 @@ jobs:
           cargo llvm-cov report --html --output-dir target/llvm-cov
           cargo llvm-cov report --json --summary-only --output-path target/llvm-cov/summary.json
 
-      - name: Capture current line coverage
+      - name: Capture current coverage metrics
+        id: coverage-metrics
         run: |
+          CURRENT_FUNCTION_COVERAGE=$(jq -r '.data[0].totals.functions.percent' target/llvm-cov/summary.json)
           CURRENT_LINE_COVERAGE=$(jq -r '.data[0].totals.lines.percent' target/llvm-cov/summary.json)
-          printf "%s\n" "${CURRENT_LINE_COVERAGE}" > target/llvm-cov/current_line_coverage.txt
+          CURRENT_REGION_COVERAGE=$(jq -r '.data[0].totals.regions.percent' target/llvm-cov/summary.json)
+          {
+            echo "current_function_coverage=${CURRENT_FUNCTION_COVERAGE}"
+            echo "current_line_coverage=${CURRENT_LINE_COVERAGE}"
+            echo "current_region_coverage=${CURRENT_REGION_COVERAGE}"
+          } >> "${GITHUB_OUTPUT}"
           {
             echo "## Coverage Report"
             echo ""
+            echo "Current total function coverage: ${CURRENT_FUNCTION_COVERAGE}%"
+            echo ""
             echo "Current total line coverage: ${CURRENT_LINE_COVERAGE}%"
+            echo ""
+            echo "Current total region coverage: ${CURRENT_REGION_COVERAGE}%"
           } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Prepare coverage summary artifact
+        run: |
+          mkdir -p target/coverage-summary
+          cp target/llvm-cov/summary.json target/coverage-summary/summary.json
 
       - name: Upload HTML report artifact
         uses: actions/upload-artifact@v7
@@ -153,9 +173,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: coverage-summary
-          path: |
-            target/llvm-cov/summary.json
-            target/llvm-cov/current_line_coverage.txt
+          path: target/coverage-summary
           if-no-files-found: error
           retention-days: 14
 
@@ -166,12 +184,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-
-      - name: Download current coverage summary artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: coverage-summary
-          path: target/coverage-current
 
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -184,6 +196,9 @@ jobs:
 
       - name: Compare current coverage against base
         env:
+          CURRENT_FUNCTION_COVERAGE: ${{ needs.coverage-report.outputs.current_function_coverage }}
+          CURRENT_LINE_COVERAGE: ${{ needs.coverage-report.outputs.current_line_coverage }}
+          CURRENT_REGION_COVERAGE: ${{ needs.coverage-report.outputs.current_region_coverage }}
           EVENT_NAME: ${{ github.event_name }}
           BASE_SHA_PR: ${{ github.event.pull_request.base.sha }}
           BASE_SHA_PUSH: ${{ github.event.before }}
@@ -211,15 +226,10 @@ jobs:
             exit 0
           fi
 
-          CURRENT_SUMMARY_FILE=$(find target/coverage-current -name summary.json -print -quit)
-          if [ -z "${CURRENT_SUMMARY_FILE}" ]; then
-            echo "Could not find summary.json in downloaded artifact."
+          if [ -z "${CURRENT_FUNCTION_COVERAGE}" ] || [ -z "${CURRENT_LINE_COVERAGE}" ] || [ -z "${CURRENT_REGION_COVERAGE}" ]; then
+            echo "Current coverage metrics are unavailable from coverage-report outputs."
             exit 1
           fi
-
-          CURRENT_LINE_COVERAGE=$(jq -r '.data[0].totals.lines.percent' "${CURRENT_SUMMARY_FILE}")
-          CURRENT_REGION_COVERAGE=$(jq -r '.data[0].totals.regions.percent' "${CURRENT_SUMMARY_FILE}")
-          CURRENT_FUNCTION_COVERAGE=$(jq -r '.data[0].totals.functions.percent' "${CURRENT_SUMMARY_FILE}")
 
           if ! git checkout --force "${BASE_SHA}"; then
             echo "Checkout of ${BASE_SHA} failed. Trying to fetch commit object directly..."
