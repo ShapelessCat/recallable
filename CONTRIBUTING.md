@@ -30,6 +30,9 @@ cargo test --package recallable --features impl_from
 cargo test --package recallable --all-features
 ```
 
+Property-based tests for the serde-backed integration suites run as part of the
+normal `cargo test` commands above.
+
 ### Running Examples
 
 The runnable example binaries live under `recallable/examples/`:
@@ -60,6 +63,22 @@ cargo run -p recallable --no-default-features --features impl_from --example imp
 - Write tests for new functionality
 - Ensure all existing tests pass
 - Add integration tests for significant features
+
+### Fuzzing
+
+The repository includes manual fuzz targets under `fuzz/`.
+
+Prerequisites:
+
+- `rustup toolchain install nightly`
+- `cargo install cargo-fuzz`
+
+Smoke-run the fuzz targets from the `fuzz/` directory:
+
+```bash
+cargo +nightly fuzz run json_memento corpus/json_memento -- -max_total_time=10
+cargo +nightly fuzz run postcard_memento corpus/postcard_memento -- -max_total_time=10
+```
 
 ## Submitting Changes
 
