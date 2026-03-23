@@ -63,3 +63,53 @@ fn test_try_recall_custom_error() {
         _ => panic!("Expected error"),
     }
 }
+
+mod phantom_lifetime {
+    use core::marker::PhantomData;
+    use recallable::{Recall, Recallable};
+
+    #[derive(Recallable, Recall)]
+    struct PhantomLifetime<'a> {
+        marker: PhantomData<&'a ()>,
+        value: u8,
+    }
+
+    type PhantomLifetimeMemento = <PhantomLifetime<'static> as Recallable>::Memento;
+
+    #[test]
+    fn test_phantom_lifetime_recall() {
+        let mut s = PhantomLifetime {
+            marker: PhantomData,
+            value: 10,
+        };
+        // marker is auto-skipped from memento (PhantomData with struct lifetime)
+        let memento = PhantomLifetimeMemento { value: 42 };
+        s.recall(memento);
+        assert_eq!(s.value, 42);
+    }
+}
+
+mod skipped_borrowed_field {
+    use recallable::{Recall, Recallable};
+
+    #[derive(Recallable, Recall)]
+    struct WithSkippedBorrow<'a> {
+        #[recallable(skip)]
+        name: &'a str,
+        value: u8,
+    }
+
+    type WithSkippedBorrowMemento = <WithSkippedBorrow<'static> as Recallable>::Memento;
+
+    #[test]
+    fn test_skipped_borrowed_field_recall() {
+        let mut s = WithSkippedBorrow {
+            name: "hello",
+            value: 10,
+        };
+        let memento = WithSkippedBorrowMemento { value: 42 };
+        s.recall(memento);
+        assert_eq!(s.value, 42);
+        assert_eq!(s.name, "hello"); // unchanged — skipped
+    }
+}
