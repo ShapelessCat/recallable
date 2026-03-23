@@ -1,3 +1,4 @@
+use proptest::{array::uniform3, prelude::*};
 use recallable::{Recallable, recallable_model};
 use serde::{Deserialize, Serialize};
 
@@ -103,4 +104,98 @@ where
 {
     #[recallable]
     pub inner: T,
+}
+
+#[recallable_model]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PropertyInner {
+    pub enabled: bool,
+    pub lanes: [u8; 3],
+}
+
+pub type PropertyInnerMemento = <PropertyInner as Recallable>::Memento;
+
+// Property tests use a small nested model with one skipped field so they can
+// simultaneously exercise nested mementos, scalar fields, and skip semantics
+// across both backends without requiring alloc-backed collections.
+#[recallable_model]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PropertyOuter {
+    pub level: i16,
+    pub threshold: u32,
+    #[recallable]
+    pub nested: PropertyInner,
+    #[recallable(skip)]
+    pub skipped_marker: u8,
+}
+
+pub type PropertyOuterMemento = <PropertyOuter as Recallable>::Memento;
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct InspectablePropertyOuterMemento {
+    pub level: i16,
+    pub threshold: u32,
+    pub nested: PropertyInnerMemento,
+}
+
+// Generate broad but backend-friendly inputs so property tests cover more than
+// a single happy-path example while still matching the project's feature set.
+pub fn property_outer_strategy() -> impl Strategy<Value = PropertyOuter> {
+    (
+        any::<i16>(),
+        any::<u32>(),
+        any::<bool>(),
+        uniform3(any::<u8>()),
+        any::<u8>(),
+    )
+        .prop_map(
+            |(level, threshold, enabled, lanes, skipped_marker)| PropertyOuter {
+                level,
+                threshold,
+                nested: PropertyInner { enabled, lanes },
+                skipped_marker,
+            },
+        )
+}
+
+// Build a known target state whose skipped field is caller-controlled. The
+// property tests use this to prove recall updates persisted fields only.
+pub fn property_seed(skipped_marker: u8) -> PropertyOuter {
+    PropertyOuter {
+        level: 0,
+        threshold: 0,
+        nested: PropertyInner {
+            enabled: false,
+            lanes: [0, 0, 0],
+        },
+        skipped_marker,
+    }
+}
+
+// Concrete schema versions keep compatibility assertions explicit: added,
+// removed, and renamed fields each represent a different kind of drift.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SchemaDriftV1 {
+    pub id: u8,
+    pub active: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SchemaDriftAddedFieldV2 {
+    pub id: u8,
+    pub revision: u8,
+    pub active: bool,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SchemaDriftRemovedFieldV2 {
+    pub id: u8,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SchemaDriftRenamedFieldV2 {
+    pub id: u8,
+    pub is_active: bool,
 }

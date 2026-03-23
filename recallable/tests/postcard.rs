@@ -1,3 +1,4 @@
+use proptest::{prelude::*, proptest};
 use recallable::{Recall, Recallable, TryRecall};
 use serde::{Deserialize, Serialize};
 
@@ -246,4 +247,75 @@ fn test_existing_where_clause_without_trailing_comma() {
             inner: Counter { value: 8 },
         }
     );
+}
+
+#[test]
+fn test_truncated_postcard_bytes_are_rejected() {
+    // Binary payloads are often corrupted by truncation rather than by cleanly
+    // invalid structure, so keep that failure mode pinned down explicitly.
+    let encoded = encode_postcard(&SchemaDriftV1 {
+        id: 9,
+        active: true,
+    });
+    let result = postcard::from_bytes::<SchemaDriftV1>(&encoded[..encoded.len() - 1]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_malformed_postcard_bytes_are_rejected() {
+    // Random bytes should not deserialize into a plausible memento by
+    // accident.
+    let result = postcard::from_bytes::<SchemaDriftV1>(&[9u8, 2u8]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_postcard_schema_drift_old_shape_into_new_shape_is_rejected() {
+    // Postcard encodes structure positionally, so adding a field changes the
+    // binary layout and old bytes should not deserialize as the new shape.
+    let encoded = encode_postcard(&SchemaDriftV1 {
+        id: 7,
+        active: true,
+    });
+    let result = postcard::from_bytes::<SchemaDriftAddedFieldV2>(&encoded);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_postcard_schema_drift_new_shape_into_old_shape_is_rejected() {
+    // The reverse direction is also intentionally strict: extra structure in
+    // the new payload should not be ignored by the old reader.
+    let encoded = encode_postcard(&SchemaDriftAddedFieldV2 {
+        id: 7,
+        active: true,
+        revision: 3,
+    });
+    let result = postcard::from_bytes::<SchemaDriftV1>(&encoded);
+    assert!(result.is_err());
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    #[test]
+    fn property_postcard_roundtrip_recall_preserves_persisted_state(
+        original in property_outer_strategy(),
+        target_skipped_marker in any::<u8>(),
+    ) {
+        // Mirror the JSON property test so the recall contract is exercised
+        // against the binary backend too, not just the textual one.
+        let memento: PropertyOuterMemento = decode_postcard(&original);
+        let inspectable: InspectablePropertyOuterMemento = decode_postcard(&original);
+        let expected_nested: PropertyInnerMemento = decode_postcard(&original.nested);
+
+        prop_assert_eq!(inspectable.nested, expected_nested);
+
+        let mut target = property_seed(target_skipped_marker);
+        target.recall(memento);
+
+        prop_assert_eq!(target.level, original.level);
+        prop_assert_eq!(target.threshold, original.threshold);
+        prop_assert_eq!(target.nested, original.nested);
+        prop_assert_eq!(target.skipped_marker, target_skipped_marker);
+    }
 }
