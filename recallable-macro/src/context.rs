@@ -141,6 +141,87 @@ impl CodegenEnv {
     }
 }
 
+#[allow(dead_code)]
+#[derive(Debug)]
+pub(crate) struct StructIr<'a> {
+    pub(crate) name: &'a Ident,
+    pub(crate) generics: &'a Generics,
+    pub(crate) shape: StructShape,
+    pub(crate) fields: Vec<FieldIr<'a>>,
+    pub(crate) memento_name: Ident,
+    pub(crate) type_params: Vec<TypeParamPlan<'a>>,
+}
+
+#[allow(dead_code)]
+impl<'a> StructIr<'a> {
+    pub(crate) fn analyze(input: &'a DeriveInput) -> syn::Result<Self> {
+        let fields = extract_struct_fields(input)?;
+        let struct_lifetimes = collect_struct_lifetimes(&input.generics);
+        validate_no_borrowed_fields(fields, &struct_lifetimes)?;
+
+        let shape = StructShape::from_fields(fields);
+        let memento_name = quote::format_ident!("{}Memento", input.ident);
+
+        let (type_params, field_irs) =
+            collect_field_irs(fields, &struct_lifetimes, &input.generics)?;
+
+        Ok(Self {
+            name: &input.ident,
+            generics: &input.generics,
+            shape,
+            fields: field_irs,
+            memento_name,
+            type_params,
+        })
+    }
+
+    pub(crate) fn memento_params(&self) -> impl Iterator<Item = &Ident> {
+        self.type_params.iter().filter_map(|p| {
+            (!matches!(p.retention, TypeParamRetention::Dropped)).then_some(p.ident)
+        })
+    }
+
+    pub(crate) fn recallable_params(&self) -> impl Iterator<Item = &Ident> {
+        self.type_params.iter().filter_map(|p| {
+            matches!(p.retention, TypeParamRetention::RetainedAsRecallable).then_some(p.ident)
+        })
+    }
+
+    pub(crate) fn memento_type(&self) -> TokenStream2 {
+        let name = &self.memento_name;
+        let params: Vec<_> = self.memento_params().collect();
+        if params.is_empty() {
+            quote! { #name }
+        } else {
+            quote! { #name<#(#params),*> }
+        }
+    }
+
+    pub(crate) fn memento_fields(&self) -> impl Iterator<Item = &FieldIr<'a>> {
+        self.fields.iter().filter(|f| !f.strategy.is_skip())
+    }
+
+    pub(crate) fn recallable_bounds(&self, bound: &TokenStream2) -> Vec<syn::WherePredicate> {
+        self.recallable_params()
+            .map(|ty| syn::parse_quote! { #ty: #bound })
+            .collect()
+    }
+
+    pub(crate) fn extend_where_clause(
+        &self,
+        extra: &[syn::WherePredicate],
+    ) -> Option<syn::WhereClause> {
+        let mut where_clause = self.generics.where_clause.clone();
+        if !extra.is_empty() {
+            where_clause
+                .get_or_insert_with(|| syn::parse_quote! { where })
+                .predicates
+                .extend(extra.iter().cloned());
+        }
+        where_clause
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct MacroContext<'a> {
     /// The name of the struct on which the derive macro is applied.
@@ -178,9 +259,9 @@ type FieldActionTriple<'a> = (HashMap<&'a Ident, TypeUsage>, Vec<FieldAction<'a>
 
 impl<'a> MacroContext<'a> {
     pub(crate) fn new(input: &'a DeriveInput) -> syn::Result<Self> {
-        let fields = Self::extract_struct_fields(input)?;
+        let fields = extract_struct_fields(input)?;
         let struct_lifetimes = collect_struct_lifetimes(&input.generics);
-        Self::validate_no_borrowed_fields(fields, &struct_lifetimes)?;
+        validate_no_borrowed_fields(fields, &struct_lifetimes)?;
         let (preserved_types, field_actions, field_irs) =
             Self::collect_field_actions(fields, &struct_lifetimes)?;
         let memento_struct_type =
@@ -261,52 +342,6 @@ impl<'a> MacroContext<'a> {
         })
     }
 
-    fn validate_no_borrowed_fields(
-        fields: &Fields,
-        struct_lifetimes: &HashSet<&Ident>,
-    ) -> syn::Result<()> {
-        if struct_lifetimes.is_empty() {
-            return Ok(());
-        }
-
-        let mut errors: Option<syn::Error> = None;
-
-        for field in fields.iter() {
-            if has_recallable_skip_attr(field) {
-                continue;
-            }
-            if is_phantom_data(&field.ty) {
-                continue;
-            }
-            if field_uses_struct_lifetime(&field.ty, struct_lifetimes) {
-                let err = syn::Error::new_spanned(
-                    &field.ty,
-                    "Recall derives do not support borrowed fields",
-                );
-                match &mut errors {
-                    Some(existing) => existing.combine(err),
-                    None => errors = Some(err),
-                }
-            }
-        }
-
-        match errors {
-            Some(e) => Err(e),
-            None => Ok(()),
-        }
-    }
-
-    fn extract_struct_fields(input: &'a DeriveInput) -> syn::Result<&'a Fields> {
-        if let Data::Struct(DataStruct { fields, .. }) = &input.data {
-            Ok(fields)
-        } else {
-            Err(syn::Error::new_spanned(
-                input,
-                "This derive macro can only be applied to structs",
-            ))
-        }
-    }
-
     fn collect_field_actions(
         fields: &'a Fields,
         struct_lifetimes: &HashSet<&'a Ident>,
@@ -346,18 +381,18 @@ impl<'a> MacroContext<'a> {
             field_irs.push(FieldIr {
                 source_index: index,
                 memento_index: None,
-                member: Self::field_member(field, index),
+                member: field_member(field, index),
                 ty: &field.ty,
                 strategy: FieldStrategy::Skip,
             });
             return Ok(());
         }
-        if let Some(field_behavior) = Self::determine_field_behavior(field)? {
-            let member = Self::field_member(field, index);
+        if let Some(field_behavior) = determine_field_behavior(field)? {
+            let member = field_member(field, index);
             let field_type = &field.ty;
             match field_behavior {
                 FieldBehavior::Recall => {
-                    if let Some(type_name) = Self::extract_recallable_type_name(field_type)? {
+                    if let Some(type_name) = extract_recallable_type_name(field_type)? {
                         // `Recallable` usage overrides `NotRecallable` usage.
                         preserved_types.insert(type_name, TypeUsage::Recallable);
                     }
@@ -365,7 +400,7 @@ impl<'a> MacroContext<'a> {
                     // no generic param to track.
                 }
                 FieldBehavior::Keep => {
-                    Self::record_non_recallable_type_usage(field_type, preserved_types);
+                    record_non_recallable_type_usage(field_type, preserved_types);
                 }
             }
             let strategy = match field_behavior {
@@ -390,92 +425,12 @@ impl<'a> MacroContext<'a> {
             field_irs.push(FieldIr {
                 source_index: index,
                 memento_index: None,
-                member: Self::field_member(field, index),
+                member: field_member(field, index),
                 ty: &field.ty,
                 strategy: FieldStrategy::Skip,
             });
         }
         Ok(())
-    }
-
-    pub(crate) fn determine_field_behavior(field: &Field) -> syn::Result<Option<FieldBehavior>> {
-        let mut saw_recallable_attr = false;
-        let mut saw_skip = false;
-
-        for attr in field.attrs.iter().filter(|attr| is_recallable_attr(attr)) {
-            saw_recallable_attr = true;
-            match &attr.meta {
-                Meta::Path(_) => {}
-                Meta::List(_) => attr.parse_nested_meta(|meta| {
-                    if meta.path.is_ident("skip") {
-                        saw_skip = true;
-                        Ok(())
-                    } else {
-                        Err(meta.error("unrecognized `recallable` parameter"))
-                    }
-                })?,
-                Meta::NameValue(_) => {
-                    return Err(syn::Error::new_spanned(
-                        attr,
-                        "unrecognized `recallable` parameter",
-                    ));
-                }
-            }
-        }
-
-        Ok((!saw_skip).then_some(if saw_recallable_attr {
-            FieldBehavior::Recall
-        } else {
-            FieldBehavior::Keep
-        }))
-    }
-
-    fn field_member(field: &'a Field, index: usize) -> FieldMember<'a> {
-        if let Some(field_name) = field.ident.as_ref() {
-            FieldMember::Named(field_name)
-        } else {
-            FieldMember::Unnamed(Index::from(index))
-        }
-    }
-
-    fn extract_recallable_type_name(field_type: &'a Type) -> syn::Result<Option<&'a Ident>> {
-        match field_type {
-            Type::Path(tp) if tp.qself.is_none() => {
-                let segments = &tp.path.segments;
-                if segments.len() == 1 {
-                    let segment = &segments[0];
-                    if matches!(segment.arguments, PathArguments::None) {
-                        // Single bare ident — a generic type parameter.
-                        Ok(Some(&segment.ident))
-                    } else {
-                        // e.g. `Option<T>` — unsupported.
-                        Err(syn::Error::new_spanned(
-                            field_type,
-                            "Only a simple generic type is supported here",
-                        ))
-                    }
-                } else {
-                    // Multi-segment path like `mod::Type` — concrete type, no generic param.
-                    Ok(None)
-                }
-            }
-            _ => Err(syn::Error::new_spanned(
-                field_type,
-                "Only a simple generic type is supported here",
-            )),
-        }
-    }
-
-    fn record_non_recallable_type_usage(
-        field_type: &'a Type,
-        preserved_types: &mut HashMap<&'a Ident, TypeUsage>,
-    ) {
-        for type_name in collect_used_simple_types(field_type) {
-            // Only mark as `NotRecallable` if not already marked as `Recallable`.
-            preserved_types
-                .entry(type_name)
-                .or_insert(TypeUsage::NotRecallable);
-        }
     }
 
     fn build_memento_struct_type(
@@ -607,11 +562,211 @@ fn is_recallable_attr(attr: &Attribute) -> bool {
     attr.path().is_ident(RECALLABLE)
 }
 
+fn extract_struct_fields(input: &DeriveInput) -> syn::Result<&Fields> {
+    if let Data::Struct(DataStruct { fields, .. }) = &input.data {
+        Ok(fields)
+    } else {
+        Err(syn::Error::new_spanned(
+            input,
+            "This derive macro can only be applied to structs",
+        ))
+    }
+}
+
+fn validate_no_borrowed_fields(fields: &Fields, struct_lifetimes: &HashSet<&Ident>) -> syn::Result<()> {
+    if struct_lifetimes.is_empty() {
+        return Ok(());
+    }
+
+    let mut errors: Option<syn::Error> = None;
+
+    for field in fields.iter() {
+        if has_recallable_skip_attr(field) {
+            continue;
+        }
+        if is_phantom_data(&field.ty) {
+            continue;
+        }
+        if field_uses_struct_lifetime(&field.ty, struct_lifetimes) {
+            let err = syn::Error::new_spanned(
+                &field.ty,
+                "Recall derives do not support borrowed fields",
+            );
+            match &mut errors {
+                Some(existing) => existing.combine(err),
+                None => errors = Some(err),
+            }
+        }
+    }
+
+    match errors {
+        Some(e) => Err(e),
+        None => Ok(()),
+    }
+}
+
+fn determine_field_behavior(field: &Field) -> syn::Result<Option<FieldBehavior>> {
+    let mut saw_recallable_attr = false;
+    let mut saw_skip = false;
+
+    for attr in field.attrs.iter().filter(|attr| is_recallable_attr(attr)) {
+        saw_recallable_attr = true;
+        match &attr.meta {
+            Meta::Path(_) => {}
+            Meta::List(_) => attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("skip") {
+                    saw_skip = true;
+                    Ok(())
+                } else {
+                    Err(meta.error("unrecognized `recallable` parameter"))
+                }
+            })?,
+            Meta::NameValue(_) => {
+                return Err(syn::Error::new_spanned(
+                    attr,
+                    "unrecognized `recallable` parameter",
+                ));
+            }
+        }
+    }
+
+    Ok((!saw_skip).then_some(if saw_recallable_attr {
+        FieldBehavior::Recall
+    } else {
+        FieldBehavior::Keep
+    }))
+}
+
+fn field_member(field: &Field, index: usize) -> FieldMember<'_> {
+    if let Some(field_name) = field.ident.as_ref() {
+        FieldMember::Named(field_name)
+    } else {
+        FieldMember::Unnamed(Index::from(index))
+    }
+}
+
+fn extract_recallable_type_name(field_type: &Type) -> syn::Result<Option<&Ident>> {
+    match field_type {
+        Type::Path(tp) if tp.qself.is_none() => {
+            let segments = &tp.path.segments;
+            if segments.len() == 1 {
+                let segment = &segments[0];
+                if matches!(segment.arguments, PathArguments::None) {
+                    // Single bare ident — a generic type parameter.
+                    Ok(Some(&segment.ident))
+                } else {
+                    // e.g. `Option<T>` — unsupported.
+                    Err(syn::Error::new_spanned(
+                        field_type,
+                        "Only a simple generic type is supported here",
+                    ))
+                }
+            } else {
+                // Multi-segment path like `mod::Type` — concrete type, no generic param.
+                Ok(None)
+            }
+        }
+        _ => Err(syn::Error::new_spanned(
+            field_type,
+            "Only a simple generic type is supported here",
+        )),
+    }
+}
+
+fn record_non_recallable_type_usage<'a>(
+    field_type: &'a Type,
+    preserved_types: &mut HashMap<&'a Ident, TypeUsage>,
+) {
+    for type_name in collect_used_simple_types(field_type) {
+        // Only mark as `NotRecallable` if not already marked as `Recallable`.
+        preserved_types
+            .entry(type_name)
+            .or_insert(TypeUsage::NotRecallable);
+    }
+}
+
+#[allow(dead_code)]
+fn collect_field_irs<'a>(
+    fields: &'a Fields,
+    struct_lifetimes: &HashSet<&'a Ident>,
+    generics: &'a Generics,
+) -> syn::Result<(Vec<TypeParamPlan<'a>>, Vec<FieldIr<'a>>)> {
+    let mut preserved_types = HashMap::new();
+    let mut field_irs = Vec::with_capacity(fields.len());
+    let mut memento_counter: usize = 0;
+
+    for (index, field) in fields.iter().enumerate() {
+        if is_phantom_data(&field.ty) && field_uses_struct_lifetime(&field.ty, struct_lifetimes) {
+            field_irs.push(FieldIr {
+                source_index: index,
+                memento_index: None,
+                member: field_member(field, index),
+                ty: &field.ty,
+                strategy: FieldStrategy::Skip,
+            });
+            continue;
+        }
+
+        match determine_field_behavior(field)? {
+            None => {
+                field_irs.push(FieldIr {
+                    source_index: index,
+                    memento_index: None,
+                    member: field_member(field, index),
+                    ty: &field.ty,
+                    strategy: FieldStrategy::Skip,
+                });
+            }
+            Some(FieldBehavior::Keep) => {
+                record_non_recallable_type_usage(&field.ty, &mut preserved_types);
+                field_irs.push(FieldIr {
+                    source_index: index,
+                    memento_index: Some(memento_counter),
+                    member: field_member(field, index),
+                    ty: &field.ty,
+                    strategy: FieldStrategy::StoreAsSelf,
+                });
+                memento_counter += 1;
+            }
+            Some(FieldBehavior::Recall) => {
+                if let Some(type_name) = extract_recallable_type_name(&field.ty)? {
+                    preserved_types.insert(type_name, TypeUsage::Recallable);
+                }
+                field_irs.push(FieldIr {
+                    source_index: index,
+                    memento_index: Some(memento_counter),
+                    member: field_member(field, index),
+                    ty: &field.ty,
+                    strategy: FieldStrategy::StoreAsMemento(RecallPath::WholeType),
+                });
+                memento_counter += 1;
+            }
+        }
+    }
+
+    let type_params = generics
+        .type_params()
+        .map(|param| {
+            let retention = match preserved_types.get(&param.ident) {
+                Some(TypeUsage::Recallable) => TypeParamRetention::RetainedAsRecallable,
+                Some(TypeUsage::NotRecallable) => TypeParamRetention::Retained,
+                None => TypeParamRetention::Dropped,
+            };
+            TypeParamPlan {
+                ident: &param.ident,
+                retention,
+            }
+        })
+        .collect();
+
+    Ok((type_params, field_irs))
+}
+
 pub fn has_recallable_skip_attr(field: &Field) -> bool {
     // Use determine_field_behavior for consistent validation.
     // In the attribute macro context, we intentionally ignore errors here
     // because the derive macros will report them with proper spans.
-    matches!(MacroContext::determine_field_behavior(field), Ok(None))
+    matches!(determine_field_behavior(field), Ok(None))
 }
 
 struct SimpleTypeCollector<'a> {
