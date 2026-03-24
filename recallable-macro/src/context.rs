@@ -356,7 +356,7 @@ fn determine_field_behavior(field: &Field) -> syn::Result<Option<FieldBehavior>>
 
     Ok(match (saw_recall, saw_skip) {
         (true, false) => Some(FieldBehavior::Recall), // #[recallable]
-        (false, true) => None, // #[recallable(skip)]
+        (false, true) => None,                        // #[recallable(skip)]
         (false, false) => Some(FieldBehavior::Keep),
         (true, true) => unreachable!("conflicting attributes handled above"),
     })

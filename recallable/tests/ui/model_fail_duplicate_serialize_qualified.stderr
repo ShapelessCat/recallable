@@ -1,4 +1,4 @@
-error: `#[recallable_model]` already derives `serde::Serialize` when the `serde` feature is enabled — remove the manual `#[derive(Serialize)]`
+error: `#[recallable_model]` already derives `serde::Serialize` when the `serde` feature is enabled — remove the manual `Serialize` derive
  --> tests/ui/model_fail_duplicate_serialize_qualified.rs:4:10
   |
 4 | #[derive(serde::Serialize)]
