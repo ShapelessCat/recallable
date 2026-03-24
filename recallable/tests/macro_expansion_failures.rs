@@ -8,7 +8,9 @@ fn derive_macro_reports_expected_failures() {
     tests.compile_fail("tests/ui/derive_fail_recallable_unknown_parameter.rs");
     tests.compile_fail("tests/ui/derive_fail_recallable_skip_with_unknown_parameter.rs");
     tests.compile_fail("tests/ui/derive_fail_recallable_name_value_parameter.rs");
+    tests.compile_fail("tests/ui/derive_fail_recallable_conflicting_attributes.rs");
     tests.compile_fail("tests/ui/model_fail_recallable_skip_with_unknown_parameter.rs");
+    tests.compile_fail("tests/ui/model_fail_recallable_conflicting_attributes.rs");
     #[cfg(feature = "serde")]
     {
         tests.compile_fail("tests/ui/model_fail_duplicate_serialize.rs");

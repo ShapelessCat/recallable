@@ -322,13 +322,14 @@ fn validate_no_borrowed_fields(
 }
 
 fn determine_field_behavior(field: &Field) -> syn::Result<Option<FieldBehavior>> {
-    let mut saw_recallable_attr = false;
+    let mut saw_recall = false;
     let mut saw_skip = false;
 
     for attr in field.attrs.iter().filter(|attr| is_recallable_attr(attr)) {
-        saw_recallable_attr = true;
         match &attr.meta {
-            Meta::Path(_) => {}
+            Meta::Path(_) => {
+                saw_recall = true;
+            }
             Meta::List(_) => attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("skip") {
                     saw_skip = true;
@@ -346,11 +347,19 @@ fn determine_field_behavior(field: &Field) -> syn::Result<Option<FieldBehavior>>
         }
     }
 
-    Ok((!saw_skip).then_some(if saw_recallable_attr {
-        FieldBehavior::Recall
-    } else {
-        FieldBehavior::Keep
-    }))
+    if saw_recall && saw_skip {
+        return Err(syn::Error::new_spanned(
+            field,
+            "conflicting `recallable` attributes: choose exactly one of `#[recallable]` or `#[recallable(skip)]`",
+        ));
+    }
+
+    Ok(match (saw_recall, saw_skip) {
+        (true, false) => Some(FieldBehavior::Recall), // #[recallable]
+        (false, true) => None, // #[recallable(skip)]
+        (false, false) => Some(FieldBehavior::Keep),
+        (true, true) => unreachable!("conflicting attributes handled above"),
+    })
 }
 
 fn field_member(field: &Field, index: usize) -> FieldMember<'_> {
