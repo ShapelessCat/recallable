@@ -5,9 +5,22 @@ use crate::context::{CodegenEnv, FieldIr, FieldMember, FieldStrategy, RecallPath
 
 pub(crate) fn gen_recall_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
     let recall_trait = &env.recall_trait;
+    let recallable_trait = &env.recallable_trait;
     let impl_generics = ir.impl_generics();
+    let memento_trait_bounds = quote! {
+        ::core::clone::Clone
+            + ::core::fmt::Debug
+            + ::core::cmp::PartialEq
+    };
     let where_clause = {
-        let extra_bounds = ir.recallable_bounds(recall_trait);
+        let mut extra_bounds = ir.recallable_bounds(recall_trait);
+        extra_bounds.extend(ir.recallable_memento_bounds(&memento_trait_bounds));
+        extra_bounds.extend(ir.whole_type_bounds(recall_trait));
+        extra_bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &memento_trait_bounds));
+        if env.serde_enabled {
+            let deserialize_owned = quote! { ::serde::de::DeserializeOwned };
+            extra_bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &deserialize_owned));
+        }
         ir.extend_where_clause(&extra_bounds)
     };
     let struct_type = ir.struct_type();

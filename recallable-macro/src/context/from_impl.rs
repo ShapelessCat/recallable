@@ -22,21 +22,37 @@ pub(crate) fn gen_from_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
 
 fn build_from_method(ir: &StructIr) -> TokenStream2 {
     let struct_type = ir.struct_type();
+    let marker_init = ir
+        .has_synthetic_marker()
+        .then(|| quote! { ::core::marker::PhantomData });
     let fn_body = match ir.shape {
         StructShape::Named => {
-            let inits = ir.memento_fields().map(|field| {
-                let member = &field.member;
-                let value = build_from_expr(field);
-                quote! { #member: #value }
-            });
+            let mut inits: Vec<_> = ir
+                .memento_fields()
+                .map(|field| {
+                    let member = &field.member;
+                    let value = build_from_expr(field);
+                    quote! { #member: #value }
+                })
+                .collect();
+            if marker_init.is_some() {
+                inits.push(quote! { _recallable_marker: ::core::marker::PhantomData });
+            }
             quote! { Self { #(#inits),* } }
         }
         StructShape::Unnamed => {
-            let values = ir.memento_fields().map(build_from_expr);
+            let mut values: Vec<_> = ir.memento_fields().map(build_from_expr).collect();
+            if let Some(marker_init) = marker_init {
+                values.push(marker_init);
+            }
             quote! { Self(#(#values),*) }
         }
         StructShape::Unit => {
-            quote! { Self }
+            if marker_init.is_some() {
+                quote! { Self { _recallable_marker: ::core::marker::PhantomData } }
+            } else {
+                quote! { Self }
+            }
         }
     };
 
@@ -61,7 +77,12 @@ fn build_from_expr(field: &FieldIr) -> TokenStream2 {
 
 fn build_from_where_clause(ir: &StructIr, env: &CodegenEnv) -> Option<syn::WhereClause> {
     let recallable_trait = &env.recallable_trait;
-    let bounds: Vec<WherePredicate> = ir
+    let memento_trait_bounds = quote! {
+        ::core::clone::Clone
+            + ::core::fmt::Debug
+            + ::core::cmp::PartialEq
+    };
+    let mut bounds: Vec<WherePredicate> = ir
         .recallable_params()
         .flat_map(|ty| -> [WherePredicate; 2] {
             [
@@ -70,5 +91,12 @@ fn build_from_where_clause(ir: &StructIr, env: &CodegenEnv) -> Option<syn::Where
             ]
         })
         .collect();
+    bounds.extend(ir.recallable_memento_bounds(&memento_trait_bounds));
+    bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &memento_trait_bounds));
+    if env.serde_enabled {
+        let deserialize_owned = quote! { ::serde::de::DeserializeOwned };
+        bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &deserialize_owned));
+    }
+    bounds.extend(ir.whole_type_from_bounds(recallable_trait));
     ir.extend_where_clause(&bounds)
 }
