@@ -167,6 +167,19 @@ impl CodegenEnv {
             impl_from_enabled: cfg!(feature = "impl_from"),
         }
     }
+
+    pub(crate) fn memento_trait_bounds(&self) -> TokenStream2 {
+        quote! {
+            ::core::clone::Clone
+                + ::core::fmt::Debug
+                + ::core::cmp::PartialEq
+        }
+    }
+
+    pub(crate) fn deserialize_owned_bound(&self) -> Option<TokenStream2> {
+        self.serde_enabled
+            .then_some(quote! { ::serde::de::DeserializeOwned })
+    }
 }
 
 #[derive(Debug)]
