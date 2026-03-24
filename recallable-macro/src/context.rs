@@ -40,6 +40,97 @@ pub(crate) enum FieldBehavior {
     Recall,
 }
 
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StructShape {
+    Named,
+    Unnamed,
+    Unit,
+}
+
+impl StructShape {
+    #[allow(dead_code)]
+    fn from_fields(fields: &Fields) -> Self {
+        match fields {
+            Fields::Named(_) => Self::Named,
+            Fields::Unnamed(_) => Self::Unnamed,
+            Fields::Unit => Self::Unit,
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RecallPath {
+    /// The entire field type implements `Recallable`.
+    WholeType,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FieldStrategy {
+    /// Field excluded from memento entirely.
+    Skip,
+    /// Field copied as-is into memento (type unchanged).
+    StoreAsSelf,
+    /// Field stored as its memento type, recalled recursively.
+    StoreAsMemento(RecallPath),
+}
+
+impl FieldStrategy {
+    #[allow(dead_code)]
+    pub(crate) fn is_skip(&self) -> bool {
+        matches!(self, Self::Skip)
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TypeParamRetention {
+    /// Used only by skipped fields — pruned from memento generics.
+    Dropped,
+    /// Used by kept fields — present in memento, no `Recallable` bound.
+    Retained,
+    /// Used by recalled fields — present in memento, needs `Recallable` bound.
+    RetainedAsRecallable,
+}
+
+#[allow(dead_code)]
+#[derive(Debug)]
+pub(crate) struct TypeParamPlan<'a> {
+    pub(crate) ident: &'a Ident,
+    pub(crate) retention: TypeParamRetention,
+}
+
+#[allow(dead_code)]
+#[derive(Debug)]
+pub(crate) struct CodegenEnv {
+    /// Base crate path (e.g. `::recallable`).
+    pub(crate) crate_path: TokenStream2,
+    /// Fully qualified path to the `Recallable` trait.
+    pub(crate) recallable_trait: TokenStream2,
+    /// Fully qualified path to the `Recall` trait.
+    pub(crate) recall_trait: TokenStream2,
+    /// Whether the `serde` feature is enabled on the macro crate.
+    pub(crate) serde_enabled: bool,
+    /// Whether the `impl_from` feature is enabled on the macro crate.
+    pub(crate) impl_from_enabled: bool,
+}
+
+impl CodegenEnv {
+    #[allow(dead_code)]
+    pub(crate) fn resolve() -> Self {
+        let crate_path = crate_path();
+        Self {
+            recallable_trait: quote! { #crate_path::Recallable },
+            recall_trait: quote! { #crate_path::Recall },
+            crate_path,
+            serde_enabled: IS_SERDE_ENABLED,
+            impl_from_enabled: cfg!(feature = "impl_from"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct MacroContext<'a> {
     /// The name of the struct on which the derive macro is applied.
