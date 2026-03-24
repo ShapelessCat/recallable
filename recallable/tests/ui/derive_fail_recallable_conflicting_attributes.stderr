@@ -1,0 +1,7 @@
+error: conflicting `recallable` attributes: choose exactly one of `#[recallable]` or `#[recallable(skip)]`
+ --> tests/ui/derive_fail_recallable_conflicting_attributes.rs:5:5
+  |
+5 | /     #[recallable]
+6 | |     #[recallable(skip)]
+7 | |     value: u32,
+  | |______________^
