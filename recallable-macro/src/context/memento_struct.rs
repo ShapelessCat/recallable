@@ -24,8 +24,7 @@ pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv) -> TokenStream
         quote! { where #(#bounded_types),* }
     };
 
-    let generic_type_params: HashSet<&Ident> =
-        ir.generics.type_params().map(|p| &p.ident).collect();
+    let generic_type_params: HashSet<&Ident> = ir.type_params().map(|p| &p.ident).collect();
 
     let fields: Vec<_> = ir
         .memento_fields()

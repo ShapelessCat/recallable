@@ -29,8 +29,8 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{ToTokens, quote};
 use syn::visit::Visit;
 use syn::{
-    Attribute, Data, DataStruct, DeriveInput, Field, Fields, GenericParam, Generics, Ident, Index,
-    Meta, PathArguments, Type,
+    Attribute, Data, DataStruct, DeriveInput, Field, Fields, GenericParam, Generics, Ident,
+    ImplGenerics, Index, Meta, PathArguments, Type, TypeParam,
 };
 
 pub const IS_SERDE_ENABLED: bool = cfg!(feature = "serde");
@@ -57,7 +57,7 @@ pub(crate) enum StructShape {
 }
 
 impl StructShape {
-    fn from_fields(fields: &Fields) -> Self {
+    const fn from_fields(fields: &Fields) -> Self {
         match fields {
             Fields::Named(_) => Self::Named,
             Fields::Unnamed(_) => Self::Unnamed,
@@ -83,7 +83,7 @@ pub(crate) enum FieldStrategy {
 }
 
 impl FieldStrategy {
-    pub(crate) fn is_skip(&self) -> bool {
+    pub(crate) const fn is_skip(&self) -> bool {
         matches!(self, Self::Skip)
     }
 }
@@ -144,12 +144,12 @@ impl CodegenEnv {
 
 #[derive(Debug)]
 pub(crate) struct StructIr<'a> {
-    pub(crate) name: &'a Ident,
-    pub(crate) generics: &'a Generics,
+    name: &'a Ident,
+    generics: &'a Generics,
     pub(crate) shape: StructShape,
-    pub(crate) fields: Vec<FieldIr<'a>>,
-    pub(crate) memento_name: Ident,
-    pub(crate) type_params: Vec<TypeParamPlan<'a>>,
+    fields: Vec<FieldIr<'a>>,
+    memento_name: Ident,
+    type_params: Vec<TypeParamPlan<'a>>,
 }
 
 impl<'a> StructIr<'a> {
@@ -172,6 +172,21 @@ impl<'a> StructIr<'a> {
             memento_name,
             type_params,
         })
+    }
+
+    pub(crate) fn struct_type(&self) -> TokenStream2 {
+        let name = &self.name;
+        let (_, type_generics, _) = self.generics.split_for_impl();
+        quote! { #name #type_generics }
+    }
+
+    pub(crate) fn impl_generics(&self) -> ImplGenerics<'_> {
+        let (impl_generics, _, _) = self.generics.split_for_impl();
+        impl_generics
+    }
+
+    pub(crate) fn type_params(&self) -> impl Iterator<Item = &TypeParam> {
+        self.generics.type_params()
     }
 
     pub(crate) fn memento_params(&self) -> impl Iterator<Item = &Ident> {
