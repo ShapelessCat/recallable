@@ -2,7 +2,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::WherePredicate;
 
-use crate::context::{CodegenEnv, FieldIr, FieldStrategy, RecallPath, StructIr, StructShape};
+use crate::context::{CodegenEnv, FieldIr, FieldStrategy, StructIr, StructShape};
 
 pub(crate) fn gen_from_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
     let impl_generics = ir.impl_generics();
@@ -82,7 +82,7 @@ fn build_from_expr(field: &FieldIr) -> TokenStream2 {
     let member = &field.member;
     match &field.strategy {
         FieldStrategy::StoreAsSelf => quote! { value.#member },
-        FieldStrategy::StoreAsMemento(RecallPath::WholeType) => {
+        FieldStrategy::StoreAsMemento => {
             quote! { ::core::convert::From::from(value.#member) }
         }
         FieldStrategy::Skip => unreachable!("memento_fields() filters skipped fields"),

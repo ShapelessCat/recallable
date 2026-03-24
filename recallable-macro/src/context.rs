@@ -61,19 +61,13 @@ impl StructShape {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum RecallPath {
-    /// The entire field type implements `Recallable`.
-    WholeType,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FieldStrategy {
     /// Field excluded from memento entirely.
     Skip,
     /// Field copied as-is into memento (type unchanged).
     StoreAsSelf,
     /// Field stored as its memento type, recalled recursively.
-    StoreAsMemento(RecallPath),
+    StoreAsMemento,
 }
 
 impl FieldStrategy {
@@ -332,7 +326,7 @@ impl<'a> StructIr<'a> {
         self.fields
             .iter()
             .filter_map(|field| match field.strategy {
-                FieldStrategy::StoreAsMemento(RecallPath::WholeType)
+                FieldStrategy::StoreAsMemento
                     if !is_generic_type_param(field.ty, &generic_type_params) =>
                 {
                     let ty = field.ty;
@@ -353,7 +347,7 @@ impl<'a> StructIr<'a> {
         self.fields
             .iter()
             .filter_map(|field| match field.strategy {
-                FieldStrategy::StoreAsMemento(RecallPath::WholeType)
+                FieldStrategy::StoreAsMemento
                     if !is_generic_type_param(field.ty, &generic_type_params) =>
                 {
                     let ty = field.ty;
@@ -373,7 +367,7 @@ impl<'a> StructIr<'a> {
         self.fields
             .iter()
             .filter_map(|field| match field.strategy {
-                FieldStrategy::StoreAsMemento(RecallPath::WholeType)
+                FieldStrategy::StoreAsMemento
                     if !is_generic_type_param(field.ty, &generic_type_params) =>
                 {
                     let ty = field.ty;
@@ -675,7 +669,7 @@ fn collect_field_irs<'a>(
                     memento_index: Some(memento_counter),
                     member: field_member(field, index),
                     ty: &field.ty,
-                    strategy: FieldStrategy::StoreAsMemento(RecallPath::WholeType),
+                    strategy: FieldStrategy::StoreAsMemento,
                 });
                 memento_counter += 1;
             }
