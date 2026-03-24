@@ -30,18 +30,12 @@ use quote::{ToTokens, quote};
 use syn::visit::Visit;
 use syn::{
     Attribute, Data, DataStruct, DeriveInput, Field, Fields, GenericParam, Generics, Ident,
-    ImplGenerics, Index, Meta, PathArguments, Type, TypeParam,
+    ImplGenerics, Index, Meta, PathArguments, Type, WhereClause, WherePredicate,
 };
 
 pub const IS_SERDE_ENABLED: bool = cfg!(feature = "serde");
 
 const RECALLABLE: &str = "recallable";
-
-#[derive(Debug)]
-enum TypeUsage {
-    NotRecallable,
-    Recallable,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FieldBehavior {
@@ -89,19 +83,52 @@ impl FieldStrategy {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TypeParamRetention {
-    /// Used only by skipped fields — pruned from memento generics.
+pub(crate) enum GenericParamRetention {
     Dropped,
-    /// Used by kept fields — present in memento, no `Recallable` bound.
     Retained,
-    /// Used by recalled fields — present in memento, needs `Recallable` bound.
     RetainedAsRecallable,
 }
 
 #[derive(Debug)]
-pub(crate) struct TypeParamPlan<'a> {
-    pub(crate) ident: &'a Ident,
-    pub(crate) retention: TypeParamRetention,
+pub(crate) struct GenericParamPlan<'a> {
+    pub(crate) param: &'a GenericParam,
+    pub(crate) retention: GenericParamRetention,
+}
+
+impl<'a> GenericParamPlan<'a> {
+    fn is_retained(&self) -> bool {
+        !matches!(self.retention, GenericParamRetention::Dropped)
+    }
+
+    fn decl_param(&self) -> GenericParam {
+        self.param.clone()
+    }
+
+    fn type_arg(&self) -> TokenStream2 {
+        match self.param {
+            GenericParam::Lifetime(param) => {
+                let lifetime = &param.lifetime;
+                quote! { #lifetime }
+            }
+            GenericParam::Type(param) => {
+                let ident = &param.ident;
+                quote! { #ident }
+            }
+            GenericParam::Const(param) => {
+                let ident = &param.ident;
+                quote! { #ident }
+            }
+        }
+    }
+
+    fn recallable_ident(&self) -> Option<&'a Ident> {
+        match (self.param, self.retention) {
+            (GenericParam::Type(param), GenericParamRetention::RetainedAsRecallable) => {
+                Some(&param.ident)
+            }
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -149,7 +176,9 @@ pub(crate) struct StructIr<'a> {
     pub(crate) shape: StructShape,
     fields: Vec<FieldIr<'a>>,
     memento_name: Ident,
-    type_params: Vec<TypeParamPlan<'a>>,
+    generic_params: Vec<GenericParamPlan<'a>>,
+    memento_where_clause: Option<WhereClause>,
+    marker_param_indices: Vec<usize>,
 }
 
 impl<'a> StructIr<'a> {
@@ -160,9 +189,13 @@ impl<'a> StructIr<'a> {
 
         let shape = StructShape::from_fields(fields);
         let memento_name = quote::format_ident!("{}Memento", input.ident);
-
-        let (type_params, field_irs) =
-            collect_field_irs(fields, &struct_lifetimes, &input.generics)?;
+        let generic_lookup = GenericParamLookup::new(&input.generics);
+        let (usage, field_irs) =
+            collect_field_irs(fields, &struct_lifetimes, &input.generics, &generic_lookup)?;
+        let (generic_params, memento_where_clause) =
+            plan_memento_generics(&input.generics, usage, &generic_lookup);
+        let marker_param_indices =
+            collect_marker_param_indices(&field_irs, &generic_params, &generic_lookup);
 
         Ok(Self {
             name: &input.ident,
@@ -170,7 +203,9 @@ impl<'a> StructIr<'a> {
             shape,
             fields: field_irs,
             memento_name,
-            type_params,
+            generic_params,
+            memento_where_clause,
+            marker_param_indices,
         })
     }
 
@@ -180,34 +215,85 @@ impl<'a> StructIr<'a> {
         quote! { #name #type_generics }
     }
 
+    pub(crate) fn memento_name(&self) -> &Ident {
+        &self.memento_name
+    }
+
     pub(crate) fn impl_generics(&self) -> ImplGenerics<'_> {
         let (impl_generics, _, _) = self.generics.split_for_impl();
         impl_generics
     }
 
-    pub(crate) fn type_params(&self) -> impl Iterator<Item = &TypeParam> {
+    pub(crate) fn type_params(&self) -> impl Iterator<Item = &syn::TypeParam> {
         self.generics.type_params()
     }
 
-    pub(crate) fn memento_params(&self) -> impl Iterator<Item = &Ident> {
-        self.type_params.iter().filter_map(|p| {
-            (!matches!(p.retention, TypeParamRetention::Dropped)).then_some(p.ident)
+    pub(crate) fn memento_decl_generics(&self) -> TokenStream2 {
+        let params: Vec<_> = self
+            .generic_params
+            .iter()
+            .filter(|plan| plan.is_retained())
+            .map(GenericParamPlan::decl_param)
+            .collect();
+
+        if params.is_empty() {
+            quote! {}
+        } else {
+            quote! { <#(#params),*> }
+        }
+    }
+
+    pub(crate) fn memento_where_clause(&self) -> Option<&WhereClause> {
+        self.memento_where_clause.as_ref()
+    }
+
+    pub(crate) fn generated_memento_shape(&self) -> StructShape {
+        if self.shape == StructShape::Unit && self.has_synthetic_marker() {
+            StructShape::Named
+        } else {
+            self.shape
+        }
+    }
+
+    pub(crate) fn has_synthetic_marker(&self) -> bool {
+        !self.marker_param_indices.is_empty()
+    }
+
+    pub(crate) fn synthetic_marker_type(&self) -> Option<TokenStream2> {
+        if self.marker_param_indices.is_empty() {
+            return None;
+        }
+
+        let components: Vec<_> = self
+            .marker_param_indices
+            .iter()
+            .map(|&index| marker_component(self.generic_params[index].param))
+            .collect();
+
+        Some(quote! {
+            ::core::marker::PhantomData<(#(#components,)*)>
         })
     }
 
     pub(crate) fn recallable_params(&self) -> impl Iterator<Item = &Ident> {
-        self.type_params.iter().filter_map(|p| {
-            matches!(p.retention, TypeParamRetention::RetainedAsRecallable).then_some(p.ident)
-        })
+        self.generic_params
+            .iter()
+            .filter_map(GenericParamPlan::recallable_ident)
     }
 
     pub(crate) fn memento_type(&self) -> TokenStream2 {
         let name = &self.memento_name;
-        let params: Vec<_> = self.memento_params().collect();
-        if params.is_empty() {
+        let args: Vec<_> = self
+            .generic_params
+            .iter()
+            .filter(|plan| plan.is_retained())
+            .map(GenericParamPlan::type_arg)
+            .collect();
+
+        if args.is_empty() {
             quote! { #name }
         } else {
-            quote! { #name<#(#params),*> }
+            quote! { #name<#(#args),*> }
         }
     }
 
@@ -215,16 +301,81 @@ impl<'a> StructIr<'a> {
         self.fields.iter().filter(|f| !f.strategy.is_skip())
     }
 
-    pub(crate) fn recallable_bounds(&self, bound: &TokenStream2) -> Vec<syn::WherePredicate> {
+    pub(crate) fn recallable_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
         self.recallable_params()
             .map(|ty| syn::parse_quote! { #ty: #bound })
             .collect()
     }
 
-    pub(crate) fn extend_where_clause(
+    pub(crate) fn recallable_memento_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
+        self.recallable_params()
+            .map(|ty| syn::parse_quote! { #ty::Memento: #bound })
+            .collect()
+    }
+
+    pub(crate) fn whole_type_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
+        let generic_type_params: HashSet<&Ident> = self.type_params().map(|p| &p.ident).collect();
+
+        self.fields
+            .iter()
+            .filter_map(|field| match field.strategy {
+                FieldStrategy::StoreAsMemento(RecallPath::WholeType)
+                    if !is_generic_type_param(field.ty, &generic_type_params) =>
+                {
+                    let ty = field.ty;
+                    Some(syn::parse_quote! { #ty: #bound })
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub(crate) fn whole_type_memento_bounds(
         &self,
-        extra: &[syn::WherePredicate],
-    ) -> Option<syn::WhereClause> {
+        recallable_trait: &TokenStream2,
+        bound: &TokenStream2,
+    ) -> Vec<WherePredicate> {
+        let generic_type_params: HashSet<&Ident> = self.type_params().map(|p| &p.ident).collect();
+
+        self.fields
+            .iter()
+            .filter_map(|field| match field.strategy {
+                FieldStrategy::StoreAsMemento(RecallPath::WholeType)
+                    if !is_generic_type_param(field.ty, &generic_type_params) =>
+                {
+                    let ty = field.ty;
+                    Some(syn::parse_quote! { <#ty as #recallable_trait>::Memento: #bound })
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub(crate) fn whole_type_from_bounds(
+        &self,
+        recallable_trait: &TokenStream2,
+    ) -> Vec<WherePredicate> {
+        let generic_type_params: HashSet<&Ident> = self.type_params().map(|p| &p.ident).collect();
+
+        self.fields
+            .iter()
+            .filter_map(|field| match field.strategy {
+                FieldStrategy::StoreAsMemento(RecallPath::WholeType)
+                    if !is_generic_type_param(field.ty, &generic_type_params) =>
+                {
+                    let ty = field.ty;
+                    Some([
+                        syn::parse_quote! { #ty: #recallable_trait },
+                        syn::parse_quote! { <#ty as #recallable_trait>::Memento: ::core::convert::From<#ty> },
+                    ])
+                }
+                _ => None,
+            })
+            .flatten()
+            .collect()
+    }
+
+    pub(crate) fn extend_where_clause(&self, extra: &[WherePredicate]) -> Option<WhereClause> {
         let mut where_clause = self.generics.where_clause.clone();
         if !extra.is_empty() {
             where_clause
@@ -370,43 +521,83 @@ fn field_member(field: &Field, index: usize) -> FieldMember<'_> {
     }
 }
 
-fn extract_recallable_type_name(field_type: &Type) -> syn::Result<Option<&Ident>> {
-    match field_type {
-        Type::Path(tp) if tp.qself.is_none() => {
-            let segments = &tp.path.segments;
-            if segments.len() == 1 {
-                let segment = &segments[0];
-                if matches!(segment.arguments, PathArguments::None) {
-                    // Single bare ident — a generic type parameter.
-                    Ok(Some(&segment.ident))
-                } else {
-                    // e.g. `Option<T>` — unsupported.
-                    Err(syn::Error::new_spanned(
-                        field_type,
-                        "Only a simple generic type is supported here",
-                    ))
+#[derive(Debug, Default)]
+struct GenericUsage {
+    retained: HashSet<usize>,
+    recallable_type_params: HashSet<usize>,
+}
+
+#[derive(Debug)]
+struct GenericParamLookup<'a> {
+    type_params: HashMap<&'a Ident, usize>,
+    const_params: HashMap<&'a Ident, usize>,
+    lifetime_params: HashMap<&'a Ident, usize>,
+}
+
+impl<'a> GenericParamLookup<'a> {
+    fn new(generics: &'a Generics) -> Self {
+        let mut type_params = HashMap::new();
+        let mut const_params = HashMap::new();
+        let mut lifetime_params = HashMap::new();
+
+        for (index, param) in generics.params.iter().enumerate() {
+            match param {
+                GenericParam::Lifetime(param) => {
+                    lifetime_params.insert(&param.lifetime.ident, index);
                 }
-            } else {
-                // Multi-segment path like `mod::Type` — concrete type, no generic param.
-                Ok(None)
+                GenericParam::Type(param) => {
+                    type_params.insert(&param.ident, index);
+                }
+                GenericParam::Const(param) => {
+                    const_params.insert(&param.ident, index);
+                }
             }
         }
-        _ => Err(syn::Error::new_spanned(
-            field_type,
-            "Only a simple generic type is supported here",
-        )),
+
+        Self {
+            type_params,
+            const_params,
+            lifetime_params,
+        }
+    }
+
+    fn type_param_index(&self, ident: &Ident) -> Option<usize> {
+        self.type_params.get(ident).copied()
+    }
+
+    fn const_param_index(&self, ident: &Ident) -> Option<usize> {
+        self.const_params.get(ident).copied()
     }
 }
 
-fn record_non_recallable_type_usage<'a>(
-    field_type: &'a Type,
-    preserved_types: &mut HashMap<&'a Ident, TypeUsage>,
-) {
-    for type_name in collect_used_simple_types(field_type) {
-        // Only mark as `NotRecallable` if not already marked as `Recallable`.
-        preserved_types
-            .entry(type_name)
-            .or_insert(TypeUsage::NotRecallable);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RecallableFieldKind {
+    BareTypeParam(usize),
+    WholeType,
+}
+
+fn classify_recallable_field_type(
+    field_type: &Type,
+    generic_lookup: &GenericParamLookup<'_>,
+) -> syn::Result<RecallableFieldKind> {
+    match field_type {
+        Type::Path(type_path)
+            if type_path.qself.is_none()
+                && type_path.path.segments.len() == 1
+                && matches!(type_path.path.segments[0].arguments, PathArguments::None) =>
+        {
+            let ident = &type_path.path.segments[0].ident;
+            if let Some(index) = generic_lookup.type_param_index(ident) {
+                Ok(RecallableFieldKind::BareTypeParam(index))
+            } else {
+                Ok(RecallableFieldKind::WholeType)
+            }
+        }
+        Type::Path(_) => Ok(RecallableFieldKind::WholeType),
+        _ => Err(syn::Error::new_spanned(
+            field_type,
+            "Only path types are supported here",
+        )),
     }
 }
 
@@ -414,8 +605,9 @@ fn collect_field_irs<'a>(
     fields: &'a Fields,
     struct_lifetimes: &HashSet<&'a Ident>,
     generics: &'a Generics,
-) -> syn::Result<(Vec<TypeParamPlan<'a>>, Vec<FieldIr<'a>>)> {
-    let mut preserved_types = HashMap::new();
+    generic_lookup: &GenericParamLookup<'a>,
+) -> syn::Result<(GenericUsage, Vec<FieldIr<'a>>)> {
+    let mut usage = GenericUsage::default();
     let mut field_irs = Vec::with_capacity(fields.len());
     let mut memento_counter: usize = 0;
 
@@ -442,7 +634,10 @@ fn collect_field_irs<'a>(
                 });
             }
             Some(FieldBehavior::Keep) => {
-                record_non_recallable_type_usage(&field.ty, &mut preserved_types);
+                usage.retained.extend(collect_generic_dependencies_in_type(
+                    &field.ty,
+                    generic_lookup,
+                ));
                 field_irs.push(FieldIr {
                     source_index: index,
                     memento_index: Some(memento_counter),
@@ -453,8 +648,14 @@ fn collect_field_irs<'a>(
                 memento_counter += 1;
             }
             Some(FieldBehavior::Recall) => {
-                if let Some(type_name) = extract_recallable_type_name(&field.ty)? {
-                    preserved_types.insert(type_name, TypeUsage::Recallable);
+                usage.retained.extend(collect_generic_dependencies_in_type(
+                    &field.ty,
+                    generic_lookup,
+                ));
+                if let RecallableFieldKind::BareTypeParam(index) =
+                    classify_recallable_field_type(&field.ty, generic_lookup)?
+                {
+                    usage.recallable_type_params.insert(index);
                 }
                 field_irs.push(FieldIr {
                     source_index: index,
@@ -468,22 +669,134 @@ fn collect_field_irs<'a>(
         }
     }
 
-    let type_params = generics
-        .type_params()
-        .map(|param| {
-            let retention = match preserved_types.get(&param.ident) {
-                Some(TypeUsage::Recallable) => TypeParamRetention::RetainedAsRecallable,
-                Some(TypeUsage::NotRecallable) => TypeParamRetention::Retained,
-                None => TypeParamRetention::Dropped,
-            };
-            TypeParamPlan {
-                ident: &param.ident,
-                retention,
-            }
+    // Keep generic params used by retained field types and then close over
+    // generic declarations plus connected where-clause predicates.
+    let _ = generics;
+    Ok((usage, field_irs))
+}
+
+fn collect_marker_param_indices(
+    fields: &[FieldIr<'_>],
+    generic_params: &[GenericParamPlan<'_>],
+    generic_lookup: &GenericParamLookup<'_>,
+) -> Vec<usize> {
+    let mut referenced_by_fields = HashSet::new();
+    for field in fields.iter().filter(|field| !field.strategy.is_skip()) {
+        referenced_by_fields.extend(collect_generic_dependencies_in_type(
+            field.ty,
+            generic_lookup,
+        ));
+    }
+
+    generic_params
+        .iter()
+        .enumerate()
+        .filter_map(|(index, plan)| {
+            (plan.is_retained() && !referenced_by_fields.contains(&index)).then_some(index)
+        })
+        .collect()
+}
+
+fn plan_memento_generics<'a>(
+    generics: &'a Generics,
+    mut usage: GenericUsage,
+    generic_lookup: &GenericParamLookup<'a>,
+) -> (Vec<GenericParamPlan<'a>>, Option<WhereClause>) {
+    let param_dependencies: Vec<_> = generics
+        .params
+        .iter()
+        .enumerate()
+        .map(|(index, param)| {
+            let mut deps = collect_generic_dependencies_in_param(param, generic_lookup);
+            deps.remove(&index);
+            deps
         })
         .collect();
 
-    Ok((type_params, field_irs))
+    let predicates_with_deps: Vec<_> = generics
+        .where_clause
+        .as_ref()
+        .map(|where_clause| {
+            where_clause
+                .predicates
+                .iter()
+                .map(|predicate| {
+                    (
+                        predicate.clone(),
+                        collect_generic_dependencies_in_where_predicate(predicate, generic_lookup),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut kept_predicates = vec![false; predicates_with_deps.len()];
+
+    loop {
+        let mut changed = false;
+
+        let retained_now: Vec<_> = usage.retained.iter().copied().collect();
+        for index in retained_now {
+            for dependency in &param_dependencies[index] {
+                changed |= usage.retained.insert(*dependency);
+            }
+        }
+
+        for (idx, (_, dependencies)) in predicates_with_deps.iter().enumerate() {
+            if dependencies.is_empty() {
+                continue;
+            }
+            if dependencies
+                .iter()
+                .any(|dependency| usage.retained.contains(dependency))
+            {
+                if !kept_predicates[idx] {
+                    kept_predicates[idx] = true;
+                    changed = true;
+                }
+                for dependency in dependencies {
+                    changed |= usage.retained.insert(*dependency);
+                }
+            }
+        }
+
+        if !changed {
+            break;
+        }
+    }
+
+    let generic_params = generics
+        .params
+        .iter()
+        .enumerate()
+        .map(|(index, param)| {
+            let retention = if usage.retained.contains(&index) {
+                if matches!(param, GenericParam::Type(_))
+                    && usage.recallable_type_params.contains(&index)
+                {
+                    GenericParamRetention::RetainedAsRecallable
+                } else {
+                    GenericParamRetention::Retained
+                }
+            } else {
+                GenericParamRetention::Dropped
+            };
+            GenericParamPlan { param, retention }
+        })
+        .collect();
+
+    let memento_where_clause = generics.where_clause.clone().and_then(|mut where_clause| {
+        where_clause.predicates = where_clause
+            .predicates
+            .into_iter()
+            .enumerate()
+            .filter_map(|(idx, predicate)| kept_predicates[idx].then_some(predicate))
+            .collect();
+
+        (!where_clause.predicates.is_empty()).then_some(where_clause)
+    });
+
+    (generic_params, memento_where_clause)
 }
 
 pub fn has_recallable_skip_attr(field: &Field) -> bool {
@@ -493,27 +806,112 @@ pub fn has_recallable_skip_attr(field: &Field) -> bool {
     matches!(determine_field_behavior(field), Ok(None))
 }
 
-struct SimpleTypeCollector<'a> {
-    used_simple_types: Vec<&'a Ident>,
+struct GenericDependencyCollector<'a> {
+    lookup: &'a GenericParamLookup<'a>,
+    dependencies: HashSet<usize>,
+    angle_arg_depth: usize,
 }
 
-impl<'ast> Visit<'ast> for SimpleTypeCollector<'ast> {
-    fn visit_type_path(&mut self, node: &'ast syn::TypePath) {
-        if node.qself.is_none()
-            && let Some(segment) = node.path.segments.first()
-        {
-            self.used_simple_types.push(&segment.ident);
+impl<'a> GenericDependencyCollector<'a> {
+    fn new(lookup: &'a GenericParamLookup<'a>) -> Self {
+        Self {
+            lookup,
+            dependencies: HashSet::new(),
+            angle_arg_depth: 0,
         }
-        syn::visit::visit_type_path(self, node);
     }
 }
 
-fn collect_used_simple_types(ty: &Type) -> Vec<&Ident> {
-    let mut collector = SimpleTypeCollector {
-        used_simple_types: Vec::new(),
-    };
+impl<'ast, 'a> Visit<'ast> for GenericDependencyCollector<'a> {
+    fn visit_lifetime(&mut self, lifetime: &'ast syn::Lifetime) {
+        if let Some(index) = self.lookup.lifetime_params.get(&lifetime.ident).copied() {
+            self.dependencies.insert(index);
+        }
+        syn::visit::visit_lifetime(self, lifetime);
+    }
+
+    fn visit_angle_bracketed_generic_arguments(
+        &mut self,
+        node: &'ast syn::AngleBracketedGenericArguments,
+    ) {
+        self.angle_arg_depth += 1;
+        syn::visit::visit_angle_bracketed_generic_arguments(self, node);
+        self.angle_arg_depth -= 1;
+    }
+
+    fn visit_type_path(&mut self, node: &'ast syn::TypePath) {
+        if node.qself.is_none()
+            && let Some(first_segment) = node.path.segments.first()
+        {
+            if let Some(index) = self.lookup.type_param_index(&first_segment.ident) {
+                self.dependencies.insert(index);
+            } else if self.angle_arg_depth > 0
+                && node.path.segments.len() == 1
+                && matches!(first_segment.arguments, PathArguments::None)
+                && let Some(index) = self.lookup.const_param_index(&first_segment.ident)
+            {
+                // `syn` represents identity const arguments like `N` as `Type`.
+                self.dependencies.insert(index);
+            }
+        }
+
+        syn::visit::visit_type_path(self, node);
+    }
+
+    fn visit_expr_path(&mut self, node: &'ast syn::ExprPath) {
+        if node.qself.is_none() && node.path.segments.len() == 1 {
+            let ident = &node.path.segments[0].ident;
+            if let Some(index) = self.lookup.const_param_index(ident) {
+                self.dependencies.insert(index);
+            }
+        }
+
+        syn::visit::visit_expr_path(self, node);
+    }
+}
+
+fn collect_generic_dependencies_in_type(
+    ty: &Type,
+    generic_lookup: &GenericParamLookup<'_>,
+) -> HashSet<usize> {
+    let mut collector = GenericDependencyCollector::new(generic_lookup);
     collector.visit_type(ty);
-    collector.used_simple_types
+    collector.dependencies
+}
+
+fn collect_generic_dependencies_in_param(
+    param: &GenericParam,
+    generic_lookup: &GenericParamLookup<'_>,
+) -> HashSet<usize> {
+    let mut collector = GenericDependencyCollector::new(generic_lookup);
+    collector.visit_generic_param(param);
+    collector.dependencies
+}
+
+fn collect_generic_dependencies_in_where_predicate(
+    predicate: &WherePredicate,
+    generic_lookup: &GenericParamLookup<'_>,
+) -> HashSet<usize> {
+    let mut collector = GenericDependencyCollector::new(generic_lookup);
+    collector.visit_where_predicate(predicate);
+    collector.dependencies
+}
+
+fn marker_component(param: &GenericParam) -> TokenStream2 {
+    match param {
+        GenericParam::Lifetime(param) => {
+            let lifetime = &param.lifetime;
+            quote! { fn() -> &#lifetime () }
+        }
+        GenericParam::Type(param) => {
+            let ident = &param.ident;
+            quote! { fn() -> #ident }
+        }
+        GenericParam::Const(param) => {
+            let ident = &param.ident;
+            quote! { [(); { let _ = #ident; 0usize }] }
+        }
+    }
 }
 
 pub(super) fn is_generic_type_param(ty: &Type, generic_type_params: &HashSet<&Ident>) -> bool {
@@ -570,4 +968,107 @@ fn field_uses_struct_lifetime(ty: &Type, struct_lifetimes: &HashSet<&Ident>) -> 
     };
     checker.visit_type(ty);
     checker.found
+}
+
+#[cfg(test)]
+mod tests {
+    use quote::{ToTokens, quote};
+    use syn::parse_quote;
+
+    use super::{StructIr, classify_recallable_field_type};
+
+    #[test]
+    fn memento_generics_preserve_retained_bounds_defaults_and_where_clauses() {
+        let input = parse_quote! {
+            struct Example<T: Clone = i32, U, const N: usize = 4>
+            where
+                T: ::core::convert::From<U>,
+                U: Copy,
+                [u8; N]: Copy,
+            {
+                value: T,
+                bytes: [u8; N],
+                #[recallable(skip)]
+                marker: ::core::marker::PhantomData<U>,
+            }
+        };
+
+        let ir = StructIr::analyze(&input).unwrap();
+
+        assert_eq!(
+            ir.memento_decl_generics().to_string(),
+            quote!(<T: Clone = i32, U, const N: usize = 4>).to_string()
+        );
+        assert_eq!(
+            ir.memento_where_clause()
+                .unwrap()
+                .to_token_stream()
+                .to_string(),
+            quote!(
+                where
+                    T: ::core::convert::From<U>,
+                    U: Copy,
+                    [u8; N]: Copy
+            )
+            .to_string()
+        );
+        assert_eq!(
+            ir.memento_type().to_string(),
+            quote!(ExampleMemento<T, U, N>).to_string()
+        );
+    }
+
+    #[test]
+    fn memento_where_clause_filters_predicates_for_dropped_params() {
+        let input = parse_quote! {
+            struct Example<T, U>
+            where
+                T: Clone,
+                U: Copy,
+            {
+                value: T,
+                #[recallable(skip)]
+                marker: ::core::marker::PhantomData<U>,
+            }
+        };
+
+        let ir = StructIr::analyze(&input).unwrap();
+
+        assert_eq!(
+            ir.memento_decl_generics().to_string(),
+            quote!(<T>).to_string()
+        );
+        assert_eq!(
+            ir.memento_where_clause()
+                .unwrap()
+                .to_token_stream()
+                .to_string(),
+            quote!(where T: Clone).to_string()
+        );
+        assert_eq!(
+            ir.memento_type().to_string(),
+            quote!(ExampleMemento<T>).to_string()
+        );
+    }
+
+    #[test]
+    fn recallable_type_classifier_accepts_any_path_type() {
+        let input: syn::DeriveInput = parse_quote! {
+            struct Example<T> {
+                #[recallable]
+                value: Option<T>,
+            }
+        };
+        let fields = match &input.data {
+            syn::Data::Struct(data) => &data.fields,
+            _ => unreachable!(),
+        };
+        let field = fields.iter().next().unwrap();
+        let lookup = super::GenericParamLookup::new(&input.generics);
+
+        assert!(matches!(
+            classify_recallable_field_type(&field.ty, &lookup),
+            Ok(super::RecallableFieldKind::WholeType)
+        ));
+    }
 }
