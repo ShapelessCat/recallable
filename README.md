@@ -63,7 +63,8 @@ The provided procedural macros handle the heavy lifting; they generate companion
 - **Serde Integration (optional, default)**: Generated memento types automatically implement `serde::Deserialize`
   but not `Serialize` — mementos are meant to be received and applied, not sent back out. This asymmetry aligns with
   typical durable-execution and incremental-update use cases. Exclude the `serde` feature to opt out
-- **Generic Support**: Support for simple generic type parameters (e.g. `T`) with automatic trait bound inference
+- **Generic Support**: Supports type and const generics, preserves retained bounds/defaults and relevant `where`
+  predicates on generated mementos, and infers trait bounds for bare `T` `#[recallable]` fields
 - **Optional `From` Derive**: Enable `From<Struct>` for `<Struct as Recallable>::Memento` with the `impl_from`
   feature
 - **Zero Runtime Overhead**: All code generation happens at compile time
@@ -112,9 +113,10 @@ Before diving into the examples, be aware of the following constraints:
 - **Structs only** — enums and unions are not supported.
 - **No lifetime-parameterized structs** — any struct with a lifetime parameter (e.g. `Foo<'a>`) is rejected, even if
   no fields borrow data.
-- **Simple generic types only** — `#[recallable]` fields accept bare type parameters (`T`) and concrete multi-segment
-  paths (`mod::Type`). Parameterized types like `Option<T>`, `Vec<T>`, and associated types like
-  `<T as Trait>::Assoc` are rejected.
+- **`#[recallable]` is limited to path types** — bare type parameters (`T`), parameterized paths like `Option<T>` and
+  `HashMap<K, V>`, module-qualified paths, associated types like `T::Assoc`, and qualified associated types like
+  `<T as Trait>::Assoc` are supported. Non-path types such as tuples, arrays, references, slices, and function types
+  are still rejected.
 - **Implicit trait requirements on field types** — the generated memento struct derives `Clone`, `Debug`, and
   `PartialEq` (and `Deserialize` when the `serde` feature is enabled). For regular fields, the field type itself must
   implement these traits. For `#[recallable]` fields, it is the field's *memento type*
@@ -219,7 +221,7 @@ want serialization to match recalling behavior.
 
 ### Nested Recallable Structs
 
-The macros fully support generic types:
+The macros support retained type and const generics on both the source type and generated memento:
 
 ```rust
 use recallable::{Recall, Recallable};
@@ -234,16 +236,26 @@ struct Container<Closure> {
 }
 
 #[derive(Clone, Debug, Serialize, Recallable, Recall)]
-struct Wrapper<T, Closure> {
+struct Wrapper<T, Closure, const N: usize> {
     data: T,
     #[recallable]
-    inner: Container<Closure>,
+    inner: ConstContainer<Closure, N>,
+}
+
+#[derive(Clone, Debug, Serialize, Recallable, Recall)]
+struct ConstContainer<Closure, const N: usize> {
+    #[serde(skip)]
+    #[recallable(skip)]
+    computation_logic: Closure,
+    version: u32,
 }
 ```
 
 The macros automatically:
 
-- Preserve only the generic parameters used by non-skipped fields
+- Preserve only the generic parameters used by non-skipped fields, plus any dependencies pulled in by retained bounds,
+  defaults, or relevant `where` predicates
+- Keep retained bounds/defaults and filtered `where` clauses on the generated memento
 - Add appropriate trait bounds (`Recallable`, `Recall`) based on field usage
 - Generate correctly parameterized memento types
 
@@ -353,6 +365,10 @@ feature enabled, it also derives `Deserialize`. For regular fields, the field ty
 implement these traits. For `#[recallable]` fields, the field's memento type
 (`<FieldType as Recallable>::Memento`) must implement them.
 
+Generated mementos retain the source generics that are actually needed by non-skipped fields,
+including const parameters, along with any retained bounds/defaults and filtered `where`
+predicates required to keep the memento well-formed.
+
 ### `#[derive(Recall)]`
 
 Derives the `Recall` trait implementation for a struct.
@@ -370,8 +386,12 @@ Marks a field for recursive recalling.
 
 **Requirements:**
 
-- The types of fields with `#[recallable]` must implement `Recall`
-- Currently only supports simple generic types (not complex types like `Vec<T>`)
+- For `#[derive(Recallable)]`, the field type must implement `Recallable`
+- For `#[derive(Recall)]`, the field type must implement `Recall`
+- Accepts any path type, including parameterized paths (`Option<T>`, `HashMap<K, V>`),
+  module-qualified paths, and associated types (`T::Assoc`, `<T as Trait>::Assoc`)
+- Non-path types such as tuples, arrays, references, slices, and function types are not yet
+  supported with `#[recallable]`
 
 ### `Recallable` Trait
 
