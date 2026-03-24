@@ -22,39 +22,7 @@ pub(crate) fn gen_from_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
 
 fn build_from_method(ir: &StructIr) -> TokenStream2 {
     let struct_type = ir.struct_type();
-    let marker_init = ir
-        .has_synthetic_marker()
-        .then(|| quote! { ::core::marker::PhantomData });
-    let fn_body = match ir.shape {
-        StructShape::Named => {
-            let mut inits: Vec<_> = ir
-                .memento_fields()
-                .map(|field| {
-                    let member = &field.member;
-                    let value = build_from_expr(field);
-                    quote! { #member: #value }
-                })
-                .collect();
-            if marker_init.is_some() {
-                inits.push(quote! { _recallable_marker: ::core::marker::PhantomData });
-            }
-            quote! { Self { #(#inits),* } }
-        }
-        StructShape::Unnamed => {
-            let mut values: Vec<_> = ir.memento_fields().map(build_from_expr).collect();
-            if let Some(marker_init) = marker_init {
-                values.push(marker_init);
-            }
-            quote! { Self(#(#values),*) }
-        }
-        StructShape::Unit => {
-            if marker_init.is_some() {
-                quote! { Self { _recallable_marker: ::core::marker::PhantomData } }
-            } else {
-                quote! { Self }
-            }
-        }
-    };
+    let fn_body = build_from_body(ir);
 
     quote! {
         #[inline(always)]
@@ -62,6 +30,52 @@ fn build_from_method(ir: &StructIr) -> TokenStream2 {
             #fn_body
         }
     }
+}
+
+fn build_from_body(ir: &StructIr) -> TokenStream2 {
+    match ir.shape {
+        StructShape::Named => build_named_from_body(ir),
+        StructShape::Unnamed => build_unnamed_from_body(ir),
+        StructShape::Unit => build_unit_from_body(ir),
+    }
+}
+
+fn build_named_from_body(ir: &StructIr) -> TokenStream2 {
+    let mut inits: Vec<_> = ir.memento_fields().map(build_named_from_field).collect();
+
+    if ir.has_synthetic_marker() {
+        inits.push(quote! { _recallable_marker: ::core::marker::PhantomData });
+    }
+
+    quote! { Self { #(#inits),* } }
+}
+
+fn build_named_from_field(field: &FieldIr) -> TokenStream2 {
+    let member = &field.member;
+    let value = build_from_expr(field);
+    quote! { #member: #value }
+}
+
+fn build_unnamed_from_body(ir: &StructIr) -> TokenStream2 {
+    let mut values: Vec<_> = ir.memento_fields().map(build_from_expr).collect();
+
+    if ir.has_synthetic_marker() {
+        values.push(build_marker_init());
+    }
+
+    quote! { Self(#(#values),*) }
+}
+
+fn build_unit_from_body(ir: &StructIr) -> TokenStream2 {
+    if ir.has_synthetic_marker() {
+        quote! { Self { _recallable_marker: ::core::marker::PhantomData } }
+    } else {
+        quote! { Self }
+    }
+}
+
+fn build_marker_init() -> TokenStream2 {
+    quote! { ::core::marker::PhantomData }
 }
 
 fn build_from_expr(field: &FieldIr) -> TokenStream2 {
@@ -76,27 +90,33 @@ fn build_from_expr(field: &FieldIr) -> TokenStream2 {
 }
 
 fn build_from_where_clause(ir: &StructIr, env: &CodegenEnv) -> Option<syn::WhereClause> {
+    let bounds = collect_from_bounds(ir, env);
+    ir.extend_where_clause(&bounds)
+}
+
+fn collect_from_bounds(ir: &StructIr, env: &CodegenEnv) -> Vec<WherePredicate> {
     let recallable_trait = &env.recallable_trait;
-    let memento_trait_bounds = quote! {
-        ::core::clone::Clone
-            + ::core::fmt::Debug
-            + ::core::cmp::PartialEq
-    };
-    let mut bounds: Vec<WherePredicate> = ir
-        .recallable_params()
+    let memento_trait_bounds = env.memento_trait_bounds();
+    let mut bounds = collect_recallable_from_bounds(ir, recallable_trait);
+    bounds.extend(ir.recallable_memento_bounds(&memento_trait_bounds));
+    bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &memento_trait_bounds));
+    if let Some(deserialize_owned) = env.deserialize_owned_bound() {
+        bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &deserialize_owned));
+    }
+    bounds.extend(ir.whole_type_from_bounds(recallable_trait));
+    bounds
+}
+
+fn collect_recallable_from_bounds(
+    ir: &StructIr,
+    recallable_trait: &TokenStream2,
+) -> Vec<WherePredicate> {
+    ir.recallable_params()
         .flat_map(|ty| -> [WherePredicate; 2] {
             [
                 syn::parse_quote! { #ty: #recallable_trait },
                 syn::parse_quote! { #ty::Memento: ::core::convert::From<#ty> },
             ]
         })
-        .collect();
-    bounds.extend(ir.recallable_memento_bounds(&memento_trait_bounds));
-    bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &memento_trait_bounds));
-    if env.serde_enabled {
-        let deserialize_owned = quote! { ::serde::de::DeserializeOwned };
-        bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &deserialize_owned));
-    }
-    bounds.extend(ir.whole_type_from_bounds(recallable_trait));
-    ir.extend_where_clause(&bounds)
+        .collect()
 }
