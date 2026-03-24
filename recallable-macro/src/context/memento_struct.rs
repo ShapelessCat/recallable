@@ -3,8 +3,10 @@ use quote::quote;
 use std::collections::HashSet;
 use syn::{Fields, Ident};
 
+use crate::context::{
+    CodegenEnv, FieldIr, FieldMember, FieldStrategy, RecallPath, StructIr, StructShape,
+};
 use crate::{IS_SERDE_ENABLED, context::MacroContext};
-use crate::context::{CodegenEnv, FieldIr, FieldMember, FieldStrategy, RecallPath, StructIr, StructShape};
 
 impl<'a> MacroContext<'a> {
     // =================================================================================================

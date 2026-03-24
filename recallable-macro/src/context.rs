@@ -13,6 +13,11 @@ mod recall_impl;
 mod recallable_impl;
 mod utils;
 
+pub(crate) use from_impl::gen_from_impl;
+pub(crate) use memento_struct::gen_memento_struct;
+pub(crate) use recall_impl::gen_recall_impl;
+pub(crate) use recallable_impl::gen_recallable_impl;
+
 use std::collections::{HashMap, HashSet};
 
 use proc_macro_crate::{FoundCrate, crate_name};
@@ -255,7 +260,11 @@ pub(crate) struct MacroContext<'a> {
     recall_trait: TokenStream2,
 }
 
-type FieldActionTriple<'a> = (HashMap<&'a Ident, TypeUsage>, Vec<FieldAction<'a>>, Vec<FieldIr<'a>>);
+type FieldActionTriple<'a> = (
+    HashMap<&'a Ident, TypeUsage>,
+    Vec<FieldAction<'a>>,
+    Vec<FieldIr<'a>>,
+);
 
 impl<'a> MacroContext<'a> {
     pub(crate) fn new(input: &'a DeriveInput) -> syn::Result<Self> {
@@ -573,7 +582,10 @@ fn extract_struct_fields(input: &DeriveInput) -> syn::Result<&Fields> {
     }
 }
 
-fn validate_no_borrowed_fields(fields: &Fields, struct_lifetimes: &HashSet<&Ident>) -> syn::Result<()> {
+fn validate_no_borrowed_fields(
+    fields: &Fields,
+    struct_lifetimes: &HashSet<&Ident>,
+) -> syn::Result<()> {
     if struct_lifetimes.is_empty() {
         return Ok(());
     }
@@ -588,10 +600,8 @@ fn validate_no_borrowed_fields(fields: &Fields, struct_lifetimes: &HashSet<&Iden
             continue;
         }
         if field_uses_struct_lifetime(&field.ty, struct_lifetimes) {
-            let err = syn::Error::new_spanned(
-                &field.ty,
-                "Recall derives do not support borrowed fields",
-            );
+            let err =
+                syn::Error::new_spanned(&field.ty, "Recall derives do not support borrowed fields");
             match &mut errors {
                 Some(existing) => existing.combine(err),
                 None => errors = Some(err),

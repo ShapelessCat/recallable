@@ -20,17 +20,12 @@
 
 use proc_macro::TokenStream;
 
-use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{Fields, ItemStruct, parse_macro_input, parse_quote};
+use syn::{DeriveInput, Fields, ItemStruct, parse_macro_input, parse_quote};
 
 mod context;
 
-use syn::DeriveInput;
-
 use crate::context::{IS_SERDE_ENABLED, crate_path, has_recallable_skip_attr};
-
-const IS_IMPL_FROM_ENABLED: bool = cfg!(feature = "impl_from");
 
 #[proc_macro_attribute]
 /// Attribute macro that augments a struct with `Recallable`/`Recall` derives.
@@ -96,29 +91,37 @@ pub fn recallable_model(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// When the `impl_from` feature is enabled for the macro crate, a
 /// `From<Struct>` implementation is also generated for the memento type.
 pub fn derive_recallable(input: TokenStream) -> TokenStream {
-    expand(input, |ctx| {
-        let memento_struct_def = ctx.build_memento_struct();
-        let recallable_trait_impl = ctx.build_recallable_trait_impl();
-        let from_struct_impl = IS_IMPL_FROM_ENABLED.then(|| {
-            let from_struct_impl = ctx.build_from_trait_impl();
-            quote! {
-                #[automatically_derived]
-                #from_struct_impl
-            }
-        });
+    let input: DeriveInput = parse_macro_input!(input as DeriveInput);
+    let ir = match context::StructIr::analyze(&input) {
+        Ok(ir) => ir,
+        Err(e) => return e.to_compile_error().into(),
+    };
+    let env = context::CodegenEnv::resolve();
 
+    let memento_struct = context::gen_memento_struct(&ir, &env);
+    let recallable_impl = context::gen_recallable_impl(&ir, &env);
+    let from_impl = if env.impl_from_enabled {
+        let from_impl = context::gen_from_impl(&ir, &env);
         quote! {
-            const _: () = {
-                #[automatically_derived]
-                #memento_struct_def
-
-                #[automatically_derived]
-                #recallable_trait_impl
-
-                #from_struct_impl
-            };
+            #[automatically_derived]
+            #from_impl
         }
-    })
+    } else {
+        quote! {}
+    };
+
+    let output = quote! {
+        const _: () = {
+            #[automatically_derived]
+            #memento_struct
+
+            #[automatically_derived]
+            #recallable_impl
+
+            #from_impl
+        };
+    };
+    output.into()
 }
 
 #[proc_macro_derive(Recall, attributes(recallable))]
@@ -129,27 +132,22 @@ pub fn derive_recallable(input: TokenStream) -> TokenStream {
 /// - recursively calls `recall` on fields marked with `#[recallable]`,
 /// - respects `#[recallable(skip)]` by omitting those fields from recalling.
 pub fn derive_recall(input: TokenStream) -> TokenStream {
-    expand(input, |ctx| {
-        let recall_trait_impl = ctx.build_recall_trait_impl();
-
-        quote! {
-            const _: () = {
-                #[automatically_derived]
-                #recall_trait_impl
-            };
-        }
-    })
-}
-
-fn expand<F>(input: TokenStream, f: F) -> TokenStream
-where
-    F: FnOnce(&context::MacroContext) -> TokenStream2,
-{
     let input: DeriveInput = parse_macro_input!(input as DeriveInput);
-    match context::MacroContext::new(&input) {
-        Ok(ctx) => f(&ctx).into(),
-        Err(e) => e.to_compile_error().into(),
-    }
+    let ir = match context::StructIr::analyze(&input) {
+        Ok(ir) => ir,
+        Err(e) => return e.to_compile_error().into(),
+    };
+    let env = context::CodegenEnv::resolve();
+
+    let recall_impl = context::gen_recall_impl(&ir, &env);
+
+    let output = quote! {
+        const _: () = {
+            #[automatically_derived]
+            #recall_impl
+        };
+    };
+    output.into()
 }
 
 fn add_serde_skip_attrs(fields: &mut Fields) {
