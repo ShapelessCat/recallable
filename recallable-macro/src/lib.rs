@@ -159,7 +159,7 @@ fn add_serde_skip_attrs(fields: &mut Fields) {
 }
 
 /// Returns an error if any existing `#[derive(...)]` attribute on the struct
-/// already includes a path whose last segment is `Serialize`.
+/// already includes a serde-backed `Serialize` derive.
 ///
 /// Called only when `IS_SERDE_ENABLED` is true, before `#[recallable_model]`
 /// injects its own `::serde::Serialize` derive.
@@ -169,20 +169,59 @@ fn check_no_serialize_derive(attrs: &[syn::Attribute]) -> syn::Result<()> {
             continue;
         }
         attr.parse_nested_meta(|meta| {
-            if meta
-                .path
-                .segments
-                .last()
-                .map(|s| s.ident == "Serialize")
-                .unwrap_or(false)
-            {
+            if is_serde_serialize_path(&meta.path) {
                 return Err(meta.error(
                     "`#[recallable_model]` already derives `serde::Serialize` when the \
-                     `serde` feature is enabled — remove the manual `#[derive(Serialize)]`",
+                     `serde` feature is enabled — remove the manual `Serialize` derive",
                 ));
             }
             Ok(())
         })?;
     }
     Ok(())
+}
+
+fn is_serde_serialize_path(path: &syn::Path) -> bool {
+    if path.is_ident("Serialize") {
+        // Attribute macros cannot resolve imported names, so keep treating a bare
+        // `Serialize` derive as serde-shaped for the common `use serde::Serialize;` case.
+        return true;
+    }
+
+    let mut segments = path.segments.iter();
+    matches!(
+        (segments.next(), segments.next(), segments.next()),
+        (Some(first), Some(second), None)
+            if (first.ident == "serde" || first.ident == "serde_derive")
+                && second.ident == "Serialize"
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use syn::parse_quote;
+
+    use super::is_serde_serialize_path;
+
+    #[test]
+    fn serde_serialize_path_detection_is_precise() {
+        assert!(is_serde_serialize_path(&parse_quote!(Serialize)));
+        assert!(is_serde_serialize_path(&parse_quote!(serde::Serialize)));
+        assert!(is_serde_serialize_path(&parse_quote!(::serde::Serialize)));
+        assert!(is_serde_serialize_path(&parse_quote!(
+            serde_derive::Serialize
+        )));
+        assert!(is_serde_serialize_path(&parse_quote!(
+            ::serde_derive::Serialize
+        )));
+
+        assert!(!is_serde_serialize_path(&parse_quote!(other::Serialize)));
+        assert!(!is_serde_serialize_path(&parse_quote!(
+            serde::ser::Serialize
+        )));
+        assert!(!is_serde_serialize_path(&parse_quote!(
+            other::serde::Serialize
+        )));
+        assert!(!is_serde_serialize_path(&parse_quote!(SerializeOwned)));
+    }
 }
