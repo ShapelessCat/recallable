@@ -20,7 +20,7 @@ pub(crate) fn gen_recall_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
 
     let statements = memento_fields
         .iter()
-        .map(|field| build_recall_statement_ir(field, recall_trait));
+        .map(|field| build_recall_statement(field, recall_trait));
 
     quote! {
         impl #impl_generics #recall_trait
@@ -34,7 +34,7 @@ pub(crate) fn gen_recall_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
     }
 }
 
-fn build_recall_statement_ir(field: &FieldIr, recall_trait: &TokenStream2) -> TokenStream2 {
+fn build_recall_statement(field: &FieldIr, recall_trait: &TokenStream2) -> TokenStream2 {
     let member = &field.member;
     let memento_index = field
         .memento_index
