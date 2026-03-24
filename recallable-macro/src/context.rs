@@ -117,6 +117,16 @@ pub(crate) struct CodegenEnv {
     pub(crate) impl_from_enabled: bool,
 }
 
+#[allow(dead_code)]
+#[derive(Debug)]
+pub(crate) struct FieldIr<'a> {
+    pub(crate) source_index: usize,
+    pub(crate) memento_index: Option<usize>,
+    pub(crate) member: FieldMember<'a>,
+    pub(crate) ty: &'a Type,
+    pub(crate) strategy: FieldStrategy,
+}
+
 impl CodegenEnv {
     #[allow(dead_code)]
     pub(crate) fn resolve() -> Self {
@@ -147,6 +157,9 @@ pub(crate) struct MacroContext<'a> {
     /// This determines whether a field is copied directly (`Keep`) or recursively recalled
     /// (`Recall`).
     field_actions: Vec<FieldAction<'a>>,
+    /// IR representation of all fields (including skipped), built in parallel with `field_actions`.
+    #[allow(dead_code)]
+    field_irs: Vec<FieldIr<'a>>,
     /// The internal generated companion memento struct type (e.g., `MyStructMemento<T, ...>`).
     memento_struct_type: TokenStream2,
     /// Fully qualified path to the `Recallable` trait.
@@ -155,12 +168,14 @@ pub(crate) struct MacroContext<'a> {
     recall_trait: TokenStream2,
 }
 
+type FieldActionTriple<'a> = (HashMap<&'a Ident, TypeUsage>, Vec<FieldAction<'a>>, Vec<FieldIr<'a>>);
+
 impl<'a> MacroContext<'a> {
     pub(crate) fn new(input: &'a DeriveInput) -> syn::Result<Self> {
         let fields = Self::extract_struct_fields(input)?;
         let struct_lifetimes = collect_struct_lifetimes(&input.generics);
         Self::validate_no_borrowed_fields(fields, &struct_lifetimes)?;
-        let (preserved_types, field_actions) =
+        let (preserved_types, field_actions, field_irs) =
             Self::collect_field_actions(fields, &struct_lifetimes)?;
         let memento_struct_type =
             Self::build_memento_struct_type(&input.ident, &input.generics, &preserved_types);
@@ -168,12 +183,19 @@ impl<'a> MacroContext<'a> {
         let recallable_trait = quote! { #crate_path :: Recallable };
         let recall_trait = quote! { #crate_path :: Recall };
 
+        debug_assert_eq!(
+            field_irs.iter().filter(|f| !f.strategy.is_skip()).count(),
+            field_actions.len(),
+            "FieldIr/FieldAction count mismatch"
+        );
+
         Ok(Self {
             struct_name: &input.ident,
             generics: &input.generics,
             fields,
             preserved_types,
             field_actions,
+            field_irs,
             memento_struct_type,
             recallable_trait,
             recall_trait,
@@ -229,9 +251,11 @@ impl<'a> MacroContext<'a> {
     fn collect_field_actions(
         fields: &'a Fields,
         struct_lifetimes: &HashSet<&'a Ident>,
-    ) -> syn::Result<(HashMap<&'a Ident, TypeUsage>, Vec<FieldAction<'a>>)> {
+    ) -> syn::Result<FieldActionTriple<'a>> {
         let mut preserved_types = HashMap::new();
         let mut field_actions = Vec::with_capacity(fields.len());
+        let mut field_irs = Vec::with_capacity(fields.len());
+        let mut memento_counter: usize = 0;
 
         for (index, field) in fields.iter().enumerate() {
             Self::collect_field_action(
@@ -240,10 +264,12 @@ impl<'a> MacroContext<'a> {
                 struct_lifetimes,
                 &mut preserved_types,
                 &mut field_actions,
+                &mut field_irs,
+                &mut memento_counter,
             )?;
         }
 
-        Ok((preserved_types, field_actions))
+        Ok((preserved_types, field_actions, field_irs))
     }
 
     fn collect_field_action(
@@ -252,10 +278,19 @@ impl<'a> MacroContext<'a> {
         struct_lifetimes: &HashSet<&Ident>,
         preserved_types: &mut HashMap<&'a Ident, TypeUsage>,
         field_actions: &mut Vec<FieldAction<'a>>,
+        field_irs: &mut Vec<FieldIr<'a>>,
+        memento_counter: &mut usize,
     ) -> syn::Result<()> {
         if is_phantom_data(&field.ty) && field_uses_struct_lifetime(&field.ty, struct_lifetimes) {
             // Auto-skip: PhantomData fields referencing struct lifetimes cannot
             // appear in the memento (which omits lifetime parameters).
+            field_irs.push(FieldIr {
+                source_index: index,
+                memento_index: None,
+                member: Self::field_member(field, index),
+                ty: &field.ty,
+                strategy: FieldStrategy::Skip,
+            });
             return Ok(());
         }
         if let Some(field_behavior) = Self::determine_field_behavior(field)? {
@@ -274,10 +309,31 @@ impl<'a> MacroContext<'a> {
                     Self::record_non_recallable_type_usage(field_type, preserved_types);
                 }
             }
+            let strategy = match field_behavior {
+                FieldBehavior::Keep => FieldStrategy::StoreAsSelf,
+                FieldBehavior::Recall => FieldStrategy::StoreAsMemento(RecallPath::WholeType),
+            };
+            field_irs.push(FieldIr {
+                source_index: index,
+                memento_index: Some(*memento_counter),
+                member: member.clone(),
+                ty: field_type,
+                strategy,
+            });
+            *memento_counter += 1;
             field_actions.push(FieldAction {
                 member,
                 ty: field_type,
                 behavior: field_behavior,
+            });
+        } else {
+            // determine_field_behavior returned None — explicit skip.
+            field_irs.push(FieldIr {
+                source_index: index,
+                memento_index: None,
+                member: Self::field_member(field, index),
+                ty: &field.ty,
+                strategy: FieldStrategy::Skip,
             });
         }
         Ok(())
@@ -378,8 +434,8 @@ impl<'a> MacroContext<'a> {
     }
 }
 
-#[derive(Debug)]
-enum FieldMember<'a> {
+#[derive(Debug, Clone)]
+pub(crate) enum FieldMember<'a> {
     Named(&'a Ident),
     Unnamed(Index),
 }
