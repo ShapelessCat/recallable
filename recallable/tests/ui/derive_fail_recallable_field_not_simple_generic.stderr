@@ -1,5 +1,0 @@
-error: Only a simple generic type is supported here
- --> tests/ui/derive_fail_recallable_field_not_simple_generic.rs:6:12
-  |
-6 |     value: Option<T>,
-  |            ^^^^^^^^^

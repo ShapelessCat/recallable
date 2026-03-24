@@ -1,9 +1,9 @@
 use recallable::Recallable;
 
 #[derive(Recallable)]
-struct InvalidNestedRecallableType<T> {
+struct InvalidNonPathRecallableField<T> {
     #[recallable]
-    value: Option<T>,
+    value: (T, T),
 }
 
 fn main() {}

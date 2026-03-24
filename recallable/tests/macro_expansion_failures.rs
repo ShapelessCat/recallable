@@ -4,7 +4,7 @@ fn derive_macro_reports_expected_failures() {
     tests.compile_fail("tests/ui/derive_fail_borrowed_fields.rs");
     tests.compile_fail("tests/ui/derive_fail_multiple_borrowed_fields.rs");
     tests.compile_fail("tests/ui/derive_fail_non_struct.rs");
-    tests.compile_fail("tests/ui/derive_fail_recallable_field_not_simple_generic.rs");
+    tests.compile_fail("tests/ui/derive_fail_recallable_field_not_path.rs");
     tests.compile_fail("tests/ui/derive_fail_recallable_unknown_parameter.rs");
     tests.compile_fail("tests/ui/derive_fail_recallable_skip_with_unknown_parameter.rs");
     tests.compile_fail("tests/ui/derive_fail_recallable_name_value_parameter.rs");
