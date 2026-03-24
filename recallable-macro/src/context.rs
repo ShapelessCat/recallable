@@ -160,6 +160,12 @@ pub(crate) struct MacroContext<'a> {
     /// IR representation of all fields (including skipped), built in parallel with `field_actions`.
     #[allow(dead_code)]
     field_irs: Vec<FieldIr<'a>>,
+    /// IR representation of all type parameters, built alongside `preserved_types`.
+    #[allow(dead_code)]
+    type_params: Vec<TypeParamPlan<'a>>,
+    /// The name of the generated companion memento struct (e.g., `MyStructMemento`).
+    #[allow(dead_code)]
+    memento_name: Ident,
     /// The internal generated companion memento struct type (e.g., `MyStructMemento<T, ...>`).
     memento_struct_type: TokenStream2,
     /// Fully qualified path to the `Recallable` trait.
@@ -183,10 +189,61 @@ impl<'a> MacroContext<'a> {
         let recallable_trait = quote! { #crate_path :: Recallable };
         let recall_trait = quote! { #crate_path :: Recall };
 
+        let type_params: Vec<TypeParamPlan<'a>> = input
+            .generics
+            .type_params()
+            .map(|param| {
+                let retention = match preserved_types.get(&param.ident) {
+                    Some(TypeUsage::Recallable) => TypeParamRetention::RetainedAsRecallable,
+                    Some(TypeUsage::NotRecallable) => TypeParamRetention::Retained,
+                    None => TypeParamRetention::Dropped,
+                };
+                TypeParamPlan {
+                    ident: &param.ident,
+                    retention,
+                }
+            })
+            .collect();
+
+        let memento_name = quote::format_ident!("{}Memento", input.ident);
+
         debug_assert_eq!(
             field_irs.iter().filter(|f| !f.strategy.is_skip()).count(),
             field_actions.len(),
             "FieldIr/FieldAction count mismatch"
+        );
+        // Every non-dropped TypeParamPlan must have a key in preserved_types, and every
+        // generic-param key in preserved_types must map to a non-dropped plan.
+        debug_assert!(
+            type_params
+                .iter()
+                .filter(|p| !matches!(p.retention, TypeParamRetention::Dropped))
+                .all(|p| preserved_types.contains_key(p.ident)),
+            "type_params/preserved_types forward mismatch"
+        );
+        let generic_param_idents: HashSet<&Ident> =
+            input.generics.type_params().map(|p| &p.ident).collect();
+        debug_assert!(
+            preserved_types
+                .keys()
+                .filter(|k| generic_param_idents.contains(*k))
+                .all(|k| type_params
+                    .iter()
+                    .any(|p| p.ident == *k && !matches!(p.retention, TypeParamRetention::Dropped))),
+            "type_params/preserved_types reverse mismatch"
+        );
+        debug_assert_eq!(
+            type_params
+                .iter()
+                .filter(|p| matches!(p.retention, TypeParamRetention::RetainedAsRecallable))
+                .count(),
+            preserved_types
+                .iter()
+                .filter(|(k, v)| {
+                    generic_param_idents.contains(*k) && matches!(v, TypeUsage::Recallable)
+                })
+                .count(),
+            "recallable param count mismatch"
         );
 
         Ok(Self {
@@ -196,6 +253,8 @@ impl<'a> MacroContext<'a> {
             preserved_types,
             field_actions,
             field_irs,
+            type_params,
+            memento_name,
             memento_struct_type,
             recallable_trait,
             recall_trait,
