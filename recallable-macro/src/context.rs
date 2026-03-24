@@ -197,8 +197,7 @@ impl<'a> StructIr<'a> {
         let shape = StructShape::from_fields(fields);
         let memento_name = quote::format_ident!("{}Memento", input.ident);
         let generic_lookup = GenericParamLookup::new(&input.generics);
-        let (usage, field_irs) =
-            collect_field_irs(fields, &struct_lifetimes, &input.generics, &generic_lookup)?;
+        let (usage, field_irs) = collect_field_irs(fields, &struct_lifetimes, &generic_lookup)?;
         let (generic_params, memento_where_clause) =
             plan_memento_generics(&input.generics, usage, &generic_lookup);
         let marker_param_indices =
@@ -611,7 +610,6 @@ fn classify_recallable_field_type(
 fn collect_field_irs<'a>(
     fields: &'a Fields,
     struct_lifetimes: &HashSet<&'a Ident>,
-    generics: &'a Generics,
     generic_lookup: &GenericParamLookup<'a>,
 ) -> syn::Result<(GenericUsage, Vec<FieldIr<'a>>)> {
     let mut usage = GenericUsage::default();
@@ -676,9 +674,6 @@ fn collect_field_irs<'a>(
         }
     }
 
-    // Keep generic params used by retained field types and then close over
-    // generic declarations plus connected where-clause predicates.
-    let _ = generics;
     Ok((usage, field_irs))
 }
 
