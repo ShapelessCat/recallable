@@ -1,9 +1,13 @@
 use core::marker::PhantomData;
+use std::any::TypeId;
 
 use recallable::recallable_model;
+use serde::Deserialize;
 
 mod nested {
-    #[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+    #[derive(
+        Clone, Debug, PartialEq, serde::Deserialize, recallable::Recallable, recallable::Recall,
+    )]
     pub struct Inner {
         pub value: i32,
     }
@@ -56,6 +60,116 @@ struct FieldWithNonRecallableAttrBeforeSkip {
     #[allow(dead_code)]
     #[recallable(skip)]
     sticky: u32,
+}
+
+trait InlineState {
+    type State: Clone + core::fmt::Debug + PartialEq + for<'de> Deserialize<'de>;
+}
+
+struct InlineStateProvider;
+
+impl InlineState for InlineStateProvider {
+    type State = i32;
+}
+
+#[derive(recallable::Recallable, recallable::Recall)]
+struct InlineBoundOuter<T: InlineState> {
+    value: <T as InlineState>::State,
+}
+
+#[derive(recallable::Recallable, recallable::Recall)]
+struct FilteredWhereOuter<T, U>
+where
+    T: Clone,
+    U: Copy,
+{
+    value: T,
+    #[recallable(skip)]
+    marker: PhantomData<U>,
+}
+
+#[derive(recallable::Recallable, recallable::Recall)]
+struct DependentBoundOuter<T: From<U>, U> {
+    value: T,
+    #[recallable(skip)]
+    marker: PhantomData<U>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize, recallable::Recallable, recallable::Recall)]
+struct GenericInner<T> {
+    value: T,
+}
+
+#[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+struct GenericPathOuter {
+    #[recallable]
+    inner: GenericInner<u32>,
+}
+
+#[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+struct OptionState<T>(Option<T>);
+
+#[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+struct OptionPathOuter {
+    #[recallable]
+    inner: OptionState<u32>,
+}
+
+trait HasState {
+    type State;
+}
+
+struct AssocProvider;
+
+impl HasState for AssocProvider {
+    type State = GenericInner<u32>;
+}
+
+#[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+struct AssocPathOuter {
+    #[recallable]
+    inner: <AssocProvider as HasState>::State,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct ConstTag<const N: usize> {
+    value: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+struct ConstBuffer<const N: usize> {
+    tag: ConstTag<N>,
+}
+
+#[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+struct GenericPair<T, const N: usize> {
+    value: T,
+    tag: ConstTag<N>,
+}
+
+#[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+struct ConstOuter<const N: usize> {
+    #[recallable]
+    inner: ConstBuffer<N>,
+}
+
+#[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+struct MixedConstOuter<T, const N: usize> {
+    #[recallable]
+    inner: GenericPair<T, N>,
+}
+
+#[derive(recallable::Recallable, recallable::Recall)]
+struct SkippedConstOuter<const N: usize> {
+    value: u8,
+    #[recallable(skip)]
+    _marker: ConstTag<N>,
+}
+
+#[cfg(not(feature = "serde"))]
+#[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+struct ArrayBackedBuffer<const N: usize> {
+    bytes: [u8; N],
 }
 
 #[test]
@@ -124,4 +238,83 @@ fn test_recallable_field_with_path_type_and_skipped_generic_param() {
     fn assert_recallable<T: recallable::Recallable + recallable::Recall>() {}
     assert_recallable::<Wrapper<u32>>();
     assert_recallable::<Wrapper<nested::Inner>>();
+}
+
+#[test]
+fn test_inline_generic_bounds_are_retained_on_mementos() {
+    let _: fn(
+        &mut InlineBoundOuter<InlineStateProvider>,
+        <InlineBoundOuter<InlineStateProvider> as recallable::Recallable>::Memento,
+    ) = <InlineBoundOuter<InlineStateProvider> as recallable::Recall>::recall;
+}
+
+#[test]
+fn test_filtered_where_clause_drops_predicates_for_pruned_params() {
+    type Left = <FilteredWhereOuter<u8, u16> as recallable::Recallable>::Memento;
+    type Right = <FilteredWhereOuter<u8, u32> as recallable::Recallable>::Memento;
+
+    assert_eq!(TypeId::of::<Left>(), TypeId::of::<Right>());
+}
+
+#[test]
+fn test_bound_dependencies_keep_other_generic_params_retained() {
+    type Left = <DependentBoundOuter<String, &'static str> as recallable::Recallable>::Memento;
+    type Right = <DependentBoundOuter<String, String> as recallable::Recallable>::Memento;
+
+    assert_ne!(TypeId::of::<Left>(), TypeId::of::<Right>());
+}
+
+#[test]
+fn test_recallable_field_accepts_generic_path_type() {
+    let _: fn(&mut GenericPathOuter, <GenericPathOuter as recallable::Recallable>::Memento) =
+        <GenericPathOuter as recallable::Recall>::recall;
+}
+
+#[test]
+fn test_recallable_field_accepts_option_type() {
+    let _: fn(&mut OptionPathOuter, <OptionPathOuter as recallable::Recallable>::Memento) =
+        <OptionPathOuter as recallable::Recall>::recall;
+}
+
+#[test]
+fn test_recallable_field_accepts_associated_type_paths() {
+    let _: fn(&mut AssocPathOuter, <AssocPathOuter as recallable::Recallable>::Memento) =
+        <AssocPathOuter as recallable::Recall>::recall;
+}
+
+#[test]
+fn test_const_generic_struct_recall_works() {
+    let _: fn(&mut ConstBuffer<3>, <ConstBuffer<3> as recallable::Recallable>::Memento) =
+        <ConstBuffer<3> as recallable::Recall>::recall;
+}
+
+#[cfg(not(feature = "serde"))]
+#[test]
+fn test_const_generic_array_field_is_supported_without_serde() {
+    let _: fn(
+        &mut ArrayBackedBuffer<3>,
+        <ArrayBackedBuffer<3> as recallable::Recallable>::Memento,
+    ) = <ArrayBackedBuffer<3> as recallable::Recall>::recall;
+}
+
+#[test]
+fn test_const_generic_recallable_field_is_supported() {
+    let _: fn(&mut ConstOuter<2>, <ConstOuter<2> as recallable::Recallable>::Memento) =
+        <ConstOuter<2> as recallable::Recall>::recall;
+}
+
+#[test]
+fn test_const_generic_recallable_field_with_mixed_type_and_const_args() {
+    let _: fn(
+        &mut MixedConstOuter<u32, 2>,
+        <MixedConstOuter<u32, 2> as recallable::Recallable>::Memento,
+    ) = <MixedConstOuter<u32, 2> as recallable::Recall>::recall;
+}
+
+#[test]
+fn test_skipped_only_const_params_are_pruned_from_memento_type() {
+    type Left = <SkippedConstOuter<1> as recallable::Recallable>::Memento;
+    type Right = <SkippedConstOuter<8> as recallable::Recallable>::Memento;
+
+    assert_eq!(TypeId::of::<Left>(), TypeId::of::<Right>());
 }
