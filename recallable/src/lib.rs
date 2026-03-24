@@ -16,6 +16,8 @@
 #![no_std]
 
 extern crate self as recallable;
+#[cfg(test)]
+extern crate std;
 
 /// Attribute macro that prepares a struct for the Memento pattern.
 ///
@@ -330,5 +332,73 @@ impl<T: Recall> TryRecall for T {
     fn try_recall(&mut self, memento: Self::Memento) -> Result<(), Self::Error> {
         self.recall(memento);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::{Recall, Recallable};
+
+    impl<T> Recallable for Option<T> {
+        type Memento = Self;
+    }
+
+    impl<T> Recall for Option<T> {
+        fn recall(&mut self, memento: Self::Memento) {
+            *self = memento;
+        }
+    }
+
+    impl<K, V, S> Recallable for HashMap<K, V, S> {
+        type Memento = Self;
+    }
+
+    impl<K, V, S> Recall for HashMap<K, V, S> {
+        fn recall(&mut self, memento: Self::Memento) {
+            *self = memento;
+        }
+    }
+
+    #[derive(Clone, Debug, PartialEq, crate::Recallable, crate::Recall)]
+    struct GenericInner<T> {
+        value: T,
+    }
+
+    #[derive(Clone, Debug, PartialEq, crate::Recallable, crate::Recall)]
+    struct OptionOuter {
+        #[recallable]
+        value: Option<u32>,
+    }
+
+    #[derive(Clone, Debug, PartialEq, crate::Recallable, crate::Recall)]
+    struct GenericOuter {
+        #[recallable]
+        value: GenericInner<u32>,
+    }
+
+    #[derive(Clone, Debug, PartialEq, crate::Recallable, crate::Recall)]
+    struct HashMapOuter {
+        #[recallable]
+        value: HashMap<u8, u32>,
+    }
+
+    #[test]
+    fn derive_accepts_raw_option_paths() {
+        let _: fn(&mut OptionOuter, <OptionOuter as Recallable>::Memento) =
+            <OptionOuter as Recall>::recall;
+    }
+
+    #[test]
+    fn derive_accepts_parameterized_path_types() {
+        let _: fn(&mut GenericOuter, <GenericOuter as Recallable>::Memento) =
+            <GenericOuter as Recall>::recall;
+    }
+
+    #[test]
+    fn derive_accepts_raw_hash_map_paths() {
+        let _: fn(&mut HashMapOuter, <HashMapOuter as Recallable>::Memento) =
+            <HashMapOuter as Recall>::recall;
     }
 }
