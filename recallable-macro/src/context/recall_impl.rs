@@ -2,7 +2,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::WherePredicate;
 
-use crate::context::{CodegenEnv, FieldIr, FieldMember, FieldStrategy, RecallPath, StructIr};
+use crate::context::{CodegenEnv, FieldIr, FieldMember, FieldStrategy, StructIr};
 
 pub(crate) fn gen_recall_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
     let recall_trait = &env.recall_trait;
@@ -72,7 +72,7 @@ fn build_recall_statement(field: &FieldIr, recall_trait: &TokenStream2) -> Token
         FieldStrategy::StoreAsSelf => {
             quote! { self.#member = memento.#memento_member; }
         }
-        FieldStrategy::StoreAsMemento(RecallPath::WholeType) => {
+        FieldStrategy::StoreAsMemento => {
             quote! { #recall_trait::recall(&mut self.#member, memento.#memento_member); }
         }
         FieldStrategy::Skip => unreachable!("memento_fields() filters skipped fields"),

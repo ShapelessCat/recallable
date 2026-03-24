@@ -4,8 +4,7 @@ use std::collections::HashSet;
 use syn::{Ident, WhereClause, WherePredicate};
 
 use crate::context::{
-    CodegenEnv, FieldIr, FieldMember, FieldStrategy, RecallPath, StructIr, StructShape,
-    is_generic_type_param,
+    CodegenEnv, FieldIr, FieldMember, FieldStrategy, StructIr, StructShape, is_generic_type_param,
 };
 
 pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
@@ -122,7 +121,7 @@ fn build_memento_field(
 ) -> TokenStream2 {
     let ty = field.ty;
     let field_ty = match &field.strategy {
-        FieldStrategy::StoreAsMemento(RecallPath::WholeType) => {
+        FieldStrategy::StoreAsMemento => {
             if is_generic_type_param(ty, generic_type_params) {
                 quote! { #ty::Memento }
             } else {
