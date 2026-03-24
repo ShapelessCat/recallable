@@ -9,7 +9,7 @@ pub(crate) fn gen_from_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
     let where_clause = build_from_where_clause(ir, env);
     let struct_name = ir.name;
     let memento_type = ir.memento_type();
-    let body = build_from_body_ir(ir);
+    let body = build_from_body(ir);
 
     quote! {
         impl #impl_generics ::core::convert::From<#struct_name #type_generics>
@@ -23,18 +23,18 @@ pub(crate) fn gen_from_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
     }
 }
 
-fn build_from_body_ir(ir: &StructIr) -> TokenStream2 {
+fn build_from_body(ir: &StructIr) -> TokenStream2 {
     match ir.shape {
         StructShape::Named => {
             let inits = ir.memento_fields().map(|field| {
                 let member = &field.member;
-                let value = build_from_expr_ir(field);
+                let value = build_from_expr(field);
                 quote! { #member: #value }
             });
             quote! { Self { #(#inits),* } }
         }
         StructShape::Unnamed => {
-            let values = ir.memento_fields().map(build_from_expr_ir);
+            let values = ir.memento_fields().map(build_from_expr);
             quote! { Self(#(#values),*) }
         }
         StructShape::Unit => {
@@ -43,7 +43,7 @@ fn build_from_body_ir(ir: &StructIr) -> TokenStream2 {
     }
 }
 
-fn build_from_expr_ir(field: &FieldIr) -> TokenStream2 {
+fn build_from_expr(field: &FieldIr) -> TokenStream2 {
     let member = &field.member;
     match &field.strategy {
         FieldStrategy::StoreAsSelf => quote! { value.#member },

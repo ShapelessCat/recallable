@@ -1,11 +1,16 @@
-//! # Macro Context
+//! # Struct IR and Code Generation
 //!
-//! [`MacroContext::new`] parses the derive input and normalizes it into a
-//! [`MacroContext`] that drives code generation.
+//! [`StructIr::analyze`] parses a `DeriveInput` into a [`StructIr`] — the
+//! semantic intermediate representation that drives all code generation.
 //!
-//! The context records field actions, preserved generics, and crate paths so the
-//! macro can emit the companion memento struct plus the `Recallable` and `Recall`
-//! trait implementations.
+//! [`CodegenEnv`] captures environment configuration (crate paths, feature
+//! flags) resolved once per macro invocation.
+//!
+//! Code generation is split into free functions in submodules:
+//! - [`gen_memento_struct`] — companion memento struct definition
+//! - [`gen_recallable_impl`] — `Recallable` trait implementation
+//! - [`gen_recall_impl`] — `Recall` trait implementation
+//! - [`gen_from_impl`] — `From<Struct>` for memento (behind `impl_from` feature)
 
 mod from_impl;
 mod memento_struct;
@@ -485,6 +490,17 @@ fn collect_used_simple_types(ty: &Type) -> Vec<&Ident> {
     };
     collector.visit_type(ty);
     collector.used_simple_types
+}
+
+pub(super) fn is_generic_type_param(ty: &Type, generic_type_params: &HashSet<&Ident>) -> bool {
+    match ty {
+        Type::Path(tp) if tp.qself.is_none() && tp.path.segments.len() == 1 => {
+            let segment = &tp.path.segments[0];
+            matches!(segment.arguments, PathArguments::None)
+                && generic_type_params.contains(&segment.ident)
+        }
+        _ => false,
+    }
 }
 
 fn collect_struct_lifetimes(generics: &Generics) -> HashSet<&Ident> {

@@ -5,6 +5,7 @@ use syn::Ident;
 
 use crate::context::{
     CodegenEnv, FieldIr, FieldMember, FieldStrategy, RecallPath, StructIr, StructShape,
+    is_generic_type_param,
 };
 
 pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
@@ -28,7 +29,7 @@ pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv) -> TokenStream
 
     let fields: Vec<_> = ir
         .memento_fields()
-        .map(|field| build_memento_field_ir(field, recallable_trait, &generic_type_params))
+        .map(|field| build_memento_field(field, recallable_trait, &generic_type_params))
         .collect();
 
     let body = match ir.shape {
@@ -43,7 +44,7 @@ pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv) -> TokenStream
     }
 }
 
-fn build_memento_field_ir(
+fn build_memento_field(
     field: &FieldIr,
     recallable_trait: &TokenStream2,
     generic_type_params: &HashSet<&Ident>,
@@ -51,7 +52,7 @@ fn build_memento_field_ir(
     let ty = field.ty;
     let field_ty = match &field.strategy {
         FieldStrategy::StoreAsMemento(RecallPath::WholeType) => {
-            if is_generic_type_param_ir(ty, generic_type_params) {
+            if is_generic_type_param(ty, generic_type_params) {
                 quote! { #ty::Memento }
             } else {
                 quote! { <#ty as #recallable_trait>::Memento }
@@ -63,16 +64,5 @@ fn build_memento_field_ir(
     match &field.member {
         FieldMember::Named(name) => quote! { #name: #field_ty },
         FieldMember::Unnamed(_) => quote! { #field_ty },
-    }
-}
-
-fn is_generic_type_param_ir(ty: &syn::Type, generic_type_params: &HashSet<&Ident>) -> bool {
-    match ty {
-        syn::Type::Path(tp) if tp.qself.is_none() && tp.path.segments.len() == 1 => {
-            let segment = &tp.path.segments[0];
-            matches!(segment.arguments, syn::PathArguments::None)
-                && generic_type_params.contains(&segment.ident)
-        }
-        _ => false,
     }
 }
