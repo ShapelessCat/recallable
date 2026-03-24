@@ -5,26 +5,24 @@ use syn::WherePredicate;
 use crate::context::{CodegenEnv, FieldIr, FieldStrategy, RecallPath, StructIr, StructShape};
 
 pub(crate) fn gen_from_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
-    let (impl_generics, type_generics, _) = ir.generics.split_for_impl();
-    let where_clause = build_from_where_clause(ir, env);
-    let struct_name = ir.name;
+    let impl_generics = ir.impl_generics();
+    let struct_type = ir.struct_type();
     let memento_type = ir.memento_type();
-    let body = build_from_body(ir);
+    let where_clause = build_from_where_clause(ir, env);
+    let from_method = build_from_method(ir);
 
     quote! {
-        impl #impl_generics ::core::convert::From<#struct_name #type_generics>
+        impl #impl_generics ::core::convert::From<#struct_type>
             for #memento_type
         #where_clause {
-            #[inline(always)]
-            fn from(value: #struct_name #type_generics) -> Self {
-                #body
-            }
+            #from_method
         }
     }
 }
 
-fn build_from_body(ir: &StructIr) -> TokenStream2 {
-    match ir.shape {
+fn build_from_method(ir: &StructIr) -> TokenStream2 {
+    let struct_type = ir.struct_type();
+    let fn_body = match ir.shape {
         StructShape::Named => {
             let inits = ir.memento_fields().map(|field| {
                 let member = &field.member;
@@ -39,6 +37,13 @@ fn build_from_body(ir: &StructIr) -> TokenStream2 {
         }
         StructShape::Unit => {
             quote! { Self }
+        }
+    };
+
+    quote! {
+        #[inline(always)]
+        fn from(value: #struct_type) -> Self {
+            #fn_body
         }
     }
 }
