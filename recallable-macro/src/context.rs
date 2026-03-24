@@ -127,9 +127,6 @@ impl<'a> GenericParamPlan<'a> {
 
 #[derive(Debug)]
 pub(crate) struct CodegenEnv {
-    /// Base crate path (e.g. `::recallable`).
-    #[allow(dead_code)]
-    pub(crate) crate_path: TokenStream2,
     /// Fully qualified path to the `Recallable` trait.
     pub(crate) recallable_trait: TokenStream2,
     /// Fully qualified path to the `Recall` trait.
@@ -140,23 +137,12 @@ pub(crate) struct CodegenEnv {
     pub(crate) impl_from_enabled: bool,
 }
 
-#[derive(Debug)]
-pub(crate) struct FieldIr<'a> {
-    #[allow(dead_code)]
-    pub(crate) source_index: usize,
-    pub(crate) memento_index: Option<usize>,
-    pub(crate) member: FieldMember<'a>,
-    pub(crate) ty: &'a Type,
-    pub(crate) strategy: FieldStrategy,
-}
-
 impl CodegenEnv {
     pub(crate) fn resolve() -> Self {
         let crate_path = crate_path();
         Self {
             recallable_trait: quote! { #crate_path::Recallable },
             recall_trait: quote! { #crate_path::Recall },
-            crate_path,
             serde_enabled: IS_SERDE_ENABLED,
             impl_from_enabled: cfg!(feature = "impl_from"),
         }
@@ -174,6 +160,14 @@ impl CodegenEnv {
         self.serde_enabled
             .then_some(quote! { ::serde::de::DeserializeOwned })
     }
+}
+
+#[derive(Debug)]
+pub(crate) struct FieldIr<'a> {
+    pub(crate) memento_index: Option<usize>,
+    pub(crate) member: FieldMember<'a>,
+    pub(crate) ty: &'a Type,
+    pub(crate) strategy: FieldStrategy,
 }
 
 #[derive(Debug)]
@@ -619,7 +613,6 @@ fn collect_field_irs<'a>(
     for (index, field) in fields.iter().enumerate() {
         if is_phantom_data(&field.ty) && field_uses_struct_lifetime(&field.ty, struct_lifetimes) {
             field_irs.push(FieldIr {
-                source_index: index,
                 memento_index: None,
                 member: field_member(field, index),
                 ty: &field.ty,
@@ -631,7 +624,6 @@ fn collect_field_irs<'a>(
         match determine_field_behavior(field)? {
             None => {
                 field_irs.push(FieldIr {
-                    source_index: index,
                     memento_index: None,
                     member: field_member(field, index),
                     ty: &field.ty,
@@ -644,7 +636,6 @@ fn collect_field_irs<'a>(
                     generic_lookup,
                 ));
                 field_irs.push(FieldIr {
-                    source_index: index,
                     memento_index: Some(memento_counter),
                     member: field_member(field, index),
                     ty: &field.ty,
@@ -663,7 +654,6 @@ fn collect_field_irs<'a>(
                     usage.recallable_type_params.insert(index);
                 }
                 field_irs.push(FieldIr {
-                    source_index: index,
                     memento_index: Some(memento_counter),
                     member: field_member(field, index),
                     ty: &field.ty,
