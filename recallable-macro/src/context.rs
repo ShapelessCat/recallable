@@ -11,7 +11,6 @@ mod from_impl;
 mod memento_struct;
 mod recall_impl;
 mod recallable_impl;
-mod utils;
 
 pub(crate) use from_impl::gen_from_impl;
 pub(crate) use memento_struct::gen_memento_struct;
@@ -40,12 +39,11 @@ enum TypeUsage {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum FieldBehavior {
+enum FieldBehavior {
     Keep,
     Recall,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum StructShape {
     Named,
@@ -54,7 +52,6 @@ pub(crate) enum StructShape {
 }
 
 impl StructShape {
-    #[allow(dead_code)]
     fn from_fields(fields: &Fields) -> Self {
         match fields {
             Fields::Named(_) => Self::Named,
@@ -64,14 +61,12 @@ impl StructShape {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RecallPath {
     /// The entire field type implements `Recallable`.
     WholeType,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FieldStrategy {
     /// Field excluded from memento entirely.
@@ -83,13 +78,11 @@ pub(crate) enum FieldStrategy {
 }
 
 impl FieldStrategy {
-    #[allow(dead_code)]
     pub(crate) fn is_skip(&self) -> bool {
         matches!(self, Self::Skip)
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TypeParamRetention {
     /// Used only by skipped fields — pruned from memento generics.
@@ -100,17 +93,16 @@ pub(crate) enum TypeParamRetention {
     RetainedAsRecallable,
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) struct TypeParamPlan<'a> {
     pub(crate) ident: &'a Ident,
     pub(crate) retention: TypeParamRetention,
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) struct CodegenEnv {
     /// Base crate path (e.g. `::recallable`).
+    #[allow(dead_code)]
     pub(crate) crate_path: TokenStream2,
     /// Fully qualified path to the `Recallable` trait.
     pub(crate) recallable_trait: TokenStream2,
@@ -122,9 +114,9 @@ pub(crate) struct CodegenEnv {
     pub(crate) impl_from_enabled: bool,
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) struct FieldIr<'a> {
+    #[allow(dead_code)]
     pub(crate) source_index: usize,
     pub(crate) memento_index: Option<usize>,
     pub(crate) member: FieldMember<'a>,
@@ -133,7 +125,6 @@ pub(crate) struct FieldIr<'a> {
 }
 
 impl CodegenEnv {
-    #[allow(dead_code)]
     pub(crate) fn resolve() -> Self {
         let crate_path = crate_path();
         Self {
@@ -146,7 +137,6 @@ impl CodegenEnv {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) struct StructIr<'a> {
     pub(crate) name: &'a Ident,
@@ -157,7 +147,6 @@ pub(crate) struct StructIr<'a> {
     pub(crate) type_params: Vec<TypeParamPlan<'a>>,
 }
 
-#[allow(dead_code)]
 impl<'a> StructIr<'a> {
     pub(crate) fn analyze(input: &'a DeriveInput) -> syn::Result<Self> {
         let fields = extract_struct_fields(input)?;
@@ -227,252 +216,10 @@ impl<'a> StructIr<'a> {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct MacroContext<'a> {
-    /// The name of the struct on which the derive macro is applied.
-    struct_name: &'a Ident,
-    /// The generics definition of the target struct.
-    generics: &'a Generics,
-    /// The fields of the target struct.
-    fields: &'a Fields,
-    /// Mapping from preserved type to its usage flag.
-    preserved_types: HashMap<&'a Ident, TypeUsage>,
-    /// The list of actions to perform for each field when generating the `recall` method and the
-    /// memento struct.
-    ///
-    /// This determines whether a field is copied directly (`Keep`) or recursively recalled
-    /// (`Recall`).
-    field_actions: Vec<FieldAction<'a>>,
-    /// IR representation of all fields (including skipped), built in parallel with `field_actions`.
-    #[allow(dead_code)]
-    field_irs: Vec<FieldIr<'a>>,
-    /// IR representation of all type parameters, built alongside `preserved_types`.
-    #[allow(dead_code)]
-    type_params: Vec<TypeParamPlan<'a>>,
-    /// The name of the generated companion memento struct (e.g., `MyStructMemento`).
-    #[allow(dead_code)]
-    memento_name: Ident,
-    /// The internal generated companion memento struct type (e.g., `MyStructMemento<T, ...>`).
-    memento_struct_type: TokenStream2,
-    /// Fully qualified path to the `Recallable` trait.
-    recallable_trait: TokenStream2,
-    /// Fully qualified path to the `Recall` trait.
-    recall_trait: TokenStream2,
-}
-
-type FieldActionTriple<'a> = (
-    HashMap<&'a Ident, TypeUsage>,
-    Vec<FieldAction<'a>>,
-    Vec<FieldIr<'a>>,
-);
-
-impl<'a> MacroContext<'a> {
-    pub(crate) fn new(input: &'a DeriveInput) -> syn::Result<Self> {
-        let fields = extract_struct_fields(input)?;
-        let struct_lifetimes = collect_struct_lifetimes(&input.generics);
-        validate_no_borrowed_fields(fields, &struct_lifetimes)?;
-        let (preserved_types, field_actions, field_irs) =
-            Self::collect_field_actions(fields, &struct_lifetimes)?;
-        let memento_struct_type =
-            Self::build_memento_struct_type(&input.ident, &input.generics, &preserved_types);
-        let crate_path = crate_path();
-        let recallable_trait = quote! { #crate_path :: Recallable };
-        let recall_trait = quote! { #crate_path :: Recall };
-
-        let type_params: Vec<TypeParamPlan<'a>> = input
-            .generics
-            .type_params()
-            .map(|param| {
-                let retention = match preserved_types.get(&param.ident) {
-                    Some(TypeUsage::Recallable) => TypeParamRetention::RetainedAsRecallable,
-                    Some(TypeUsage::NotRecallable) => TypeParamRetention::Retained,
-                    None => TypeParamRetention::Dropped,
-                };
-                TypeParamPlan {
-                    ident: &param.ident,
-                    retention,
-                }
-            })
-            .collect();
-
-        let memento_name = quote::format_ident!("{}Memento", input.ident);
-
-        debug_assert_eq!(
-            field_irs.iter().filter(|f| !f.strategy.is_skip()).count(),
-            field_actions.len(),
-            "FieldIr/FieldAction count mismatch"
-        );
-        // Every non-dropped TypeParamPlan must have a key in preserved_types, and every
-        // generic-param key in preserved_types must map to a non-dropped plan.
-        debug_assert!(
-            type_params
-                .iter()
-                .filter(|p| !matches!(p.retention, TypeParamRetention::Dropped))
-                .all(|p| preserved_types.contains_key(p.ident)),
-            "type_params/preserved_types forward mismatch"
-        );
-        let generic_param_idents: HashSet<&Ident> =
-            input.generics.type_params().map(|p| &p.ident).collect();
-        debug_assert!(
-            preserved_types
-                .keys()
-                .filter(|k| generic_param_idents.contains(*k))
-                .all(|k| type_params
-                    .iter()
-                    .any(|p| p.ident == *k && !matches!(p.retention, TypeParamRetention::Dropped))),
-            "type_params/preserved_types reverse mismatch"
-        );
-        debug_assert_eq!(
-            type_params
-                .iter()
-                .filter(|p| matches!(p.retention, TypeParamRetention::RetainedAsRecallable))
-                .count(),
-            preserved_types
-                .iter()
-                .filter(|(k, v)| {
-                    generic_param_idents.contains(*k) && matches!(v, TypeUsage::Recallable)
-                })
-                .count(),
-            "recallable param count mismatch"
-        );
-
-        Ok(Self {
-            struct_name: &input.ident,
-            generics: &input.generics,
-            fields,
-            preserved_types,
-            field_actions,
-            field_irs,
-            type_params,
-            memento_name,
-            memento_struct_type,
-            recallable_trait,
-            recall_trait,
-        })
-    }
-
-    fn collect_field_actions(
-        fields: &'a Fields,
-        struct_lifetimes: &HashSet<&'a Ident>,
-    ) -> syn::Result<FieldActionTriple<'a>> {
-        let mut preserved_types = HashMap::new();
-        let mut field_actions = Vec::with_capacity(fields.len());
-        let mut field_irs = Vec::with_capacity(fields.len());
-        let mut memento_counter: usize = 0;
-
-        for (index, field) in fields.iter().enumerate() {
-            Self::collect_field_action(
-                index,
-                field,
-                struct_lifetimes,
-                &mut preserved_types,
-                &mut field_actions,
-                &mut field_irs,
-                &mut memento_counter,
-            )?;
-        }
-
-        Ok((preserved_types, field_actions, field_irs))
-    }
-
-    fn collect_field_action(
-        index: usize,
-        field: &'a Field,
-        struct_lifetimes: &HashSet<&Ident>,
-        preserved_types: &mut HashMap<&'a Ident, TypeUsage>,
-        field_actions: &mut Vec<FieldAction<'a>>,
-        field_irs: &mut Vec<FieldIr<'a>>,
-        memento_counter: &mut usize,
-    ) -> syn::Result<()> {
-        if is_phantom_data(&field.ty) && field_uses_struct_lifetime(&field.ty, struct_lifetimes) {
-            // Auto-skip: PhantomData fields referencing struct lifetimes cannot
-            // appear in the memento (which omits lifetime parameters).
-            field_irs.push(FieldIr {
-                source_index: index,
-                memento_index: None,
-                member: field_member(field, index),
-                ty: &field.ty,
-                strategy: FieldStrategy::Skip,
-            });
-            return Ok(());
-        }
-        if let Some(field_behavior) = determine_field_behavior(field)? {
-            let member = field_member(field, index);
-            let field_type = &field.ty;
-            match field_behavior {
-                FieldBehavior::Recall => {
-                    if let Some(type_name) = extract_recallable_type_name(field_type)? {
-                        // `Recallable` usage overrides `NotRecallable` usage.
-                        preserved_types.insert(type_name, TypeUsage::Recallable);
-                    }
-                    // None means a concrete multi-segment path (e.g. `mod::Type`);
-                    // no generic param to track.
-                }
-                FieldBehavior::Keep => {
-                    record_non_recallable_type_usage(field_type, preserved_types);
-                }
-            }
-            let strategy = match field_behavior {
-                FieldBehavior::Keep => FieldStrategy::StoreAsSelf,
-                FieldBehavior::Recall => FieldStrategy::StoreAsMemento(RecallPath::WholeType),
-            };
-            field_irs.push(FieldIr {
-                source_index: index,
-                memento_index: Some(*memento_counter),
-                member: member.clone(),
-                ty: field_type,
-                strategy,
-            });
-            *memento_counter += 1;
-            field_actions.push(FieldAction {
-                member,
-                ty: field_type,
-                behavior: field_behavior,
-            });
-        } else {
-            // determine_field_behavior returned None — explicit skip.
-            field_irs.push(FieldIr {
-                source_index: index,
-                memento_index: None,
-                member: field_member(field, index),
-                ty: &field.ty,
-                strategy: FieldStrategy::Skip,
-            });
-        }
-        Ok(())
-    }
-
-    fn build_memento_struct_type(
-        struct_name: &Ident,
-        generics: &Generics,
-        preserved_types: &HashMap<&'a Ident, TypeUsage>,
-    ) -> TokenStream2 {
-        let memento_struct_name = quote::format_ident!("{}Memento", struct_name);
-        let memento_generic_params = generics.type_params().filter_map(|param| {
-            preserved_types
-                .contains_key(&param.ident)
-                .then_some(&param.ident)
-        });
-        quote! { #memento_struct_name <#(#memento_generic_params),*> }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub(crate) enum FieldMember<'a> {
     Named(&'a Ident),
     Unnamed(Index),
-}
-
-impl<'a> FieldMember<'a> {
-    fn recall_member(&self, recall_index: usize) -> TokenStream2 {
-        match self {
-            FieldMember::Named(name) => quote! { #name },
-            FieldMember::Unnamed(_) => {
-                let index = Index::from(recall_index);
-                quote! { #index }
-            }
-        }
-    }
 }
 
 impl<'a> ToTokens for FieldMember<'a> {
@@ -480,67 +227,6 @@ impl<'a> ToTokens for FieldMember<'a> {
         match self {
             FieldMember::Named(ident) => ident.to_tokens(tokens),
             FieldMember::Unnamed(index) => index.to_tokens(tokens),
-        }
-    }
-}
-
-#[derive(Debug)]
-struct FieldAction<'a> {
-    member: FieldMember<'a>,
-    ty: &'a Type,
-    behavior: FieldBehavior,
-}
-
-impl<'a> FieldAction<'a> {
-    fn build_field(
-        &self,
-        recallable_trait: &TokenStream2,
-        generic_type_params: &HashSet<&Ident>,
-    ) -> TokenStream2 {
-        let member = &self.member;
-        let ty = self.ty;
-        let field_ty = if self.behavior == FieldBehavior::Recall {
-            if is_generic_type_param(ty, generic_type_params) {
-                // Generic type param (e.g. `T`): use `T::Memento` so that derive macros on the
-                // memento struct generate correct bounds like `T: Clone` rather than the
-                // unsatisfied `<T as Recallable>::Memento: Clone`.
-                quote! { #ty::Memento }
-            } else {
-                // Concrete type (e.g. `mod::Type` or `String`): use fully-qualified syntax to
-                // avoid E0223 "ambiguous associated type".
-                quote! { <#ty as #recallable_trait>::Memento }
-            }
-        } else {
-            quote! { #ty }
-        };
-        match member {
-            FieldMember::Named(name) => quote! { #name : #field_ty },
-            FieldMember::Unnamed(_) => quote! { #field_ty },
-        }
-    }
-
-    fn build_update_statement(
-        &self,
-        recall_trait: &TokenStream2,
-        recall_index: usize,
-    ) -> TokenStream2 {
-        let member = &self.member;
-        let recall_member = member.recall_member(recall_index);
-        match self.behavior {
-            FieldBehavior::Keep => {
-                quote! { self.#member = memento.#recall_member; }
-            }
-            FieldBehavior::Recall => {
-                quote! { #recall_trait::recall(&mut self.#member, memento.#recall_member); }
-            }
-        }
-    }
-
-    fn build_initializer_expr(&self) -> TokenStream2 {
-        let member = &self.member;
-        match self.behavior {
-            FieldBehavior::Keep => quote! { value.#member },
-            FieldBehavior::Recall => quote! { ::core::convert::From::from(value.#member) },
         }
     }
 }
@@ -695,7 +381,6 @@ fn record_non_recallable_type_usage<'a>(
     }
 }
 
-#[allow(dead_code)]
 fn collect_field_irs<'a>(
     fields: &'a Fields,
     struct_lifetimes: &HashSet<&'a Ident>,
@@ -800,17 +485,6 @@ fn collect_used_simple_types(ty: &Type) -> Vec<&Ident> {
     };
     collector.visit_type(ty);
     collector.used_simple_types
-}
-
-fn is_generic_type_param(ty: &Type, generic_type_params: &HashSet<&Ident>) -> bool {
-    match ty {
-        Type::Path(tp) if tp.qself.is_none() && tp.path.segments.len() == 1 => {
-            let segment = &tp.path.segments[0];
-            matches!(segment.arguments, PathArguments::None)
-                && generic_type_params.contains(&segment.ident)
-        }
-        _ => false,
-    }
 }
 
 fn collect_struct_lifetimes(generics: &Generics) -> HashSet<&Ident> {
