@@ -16,8 +16,6 @@
 #![no_std]
 
 extern crate self as recallable;
-#[cfg(test)]
-extern crate std;
 
 /// Attribute macro that prepares a struct for the Memento pattern.
 ///
@@ -337,6 +335,9 @@ impl<T: Recall> TryRecall for T {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(test)]
+    extern crate std;
+
     use std::collections::HashMap;
 
     use super::{Recall, Recallable};
