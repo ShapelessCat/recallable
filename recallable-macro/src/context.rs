@@ -30,7 +30,7 @@ use quote::{ToTokens, quote};
 use syn::visit::Visit;
 use syn::{
     Attribute, Data, DataStruct, DeriveInput, Field, Fields, GenericParam, Generics, Ident,
-    ImplGenerics, Index, Meta, PathArguments, Type, WhereClause, WherePredicate,
+    ImplGenerics, Index, Meta, PathArguments, Type, Visibility, WhereClause, WherePredicate,
 };
 
 pub const IS_SERDE_ENABLED: bool = cfg!(feature = "serde");
@@ -182,6 +182,7 @@ pub(crate) struct FieldIr<'a> {
 #[derive(Debug)]
 pub(crate) struct StructIr<'a> {
     name: &'a Ident,
+    visibility: &'a Visibility,
     generics: &'a Generics,
     shape: StructShape,
     fields: Vec<FieldIr<'a>>,
@@ -214,6 +215,7 @@ impl<'a> StructIr<'a> {
 
         Ok(Self {
             name: &input.ident,
+            visibility: &input.vis,
             generics: &input.generics,
             shape,
             fields: field_irs,
@@ -233,6 +235,10 @@ impl<'a> StructIr<'a> {
 
     pub(crate) fn memento_name(&self) -> &Ident {
         &self.memento_name
+    }
+
+    pub(crate) fn visibility(&self) -> &'a Visibility {
+        self.visibility
     }
 
     pub(crate) fn impl_generics(&self) -> ImplGenerics<'_> {
@@ -1013,7 +1019,7 @@ mod tests {
 
     use super::{
         CodegenEnv, StructIr, classify_recallable_field_type, collect_recall_like_bounds,
-        collect_shared_memento_bounds, is_phantom_data,
+        collect_shared_memento_bounds, gen_memento_struct, is_phantom_data,
     };
 
     #[test]
@@ -1271,5 +1277,38 @@ mod tests {
                 .to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn generated_memento_visibility_matches_companion_struct() {
+        let env = CodegenEnv {
+            recallable_trait: quote!(::recallable::Recallable),
+            recall_trait: quote!(::recallable::Recall),
+            serde_enabled: true,
+            impl_from_enabled: true,
+        };
+
+        let restricted_input: syn::DeriveInput = parse_quote! {
+            pub(crate) struct Example {
+                value: u32,
+            }
+        };
+        let restricted_ir = StructIr::analyze(&restricted_input).unwrap();
+        let restricted_memento: syn::ItemStruct =
+            syn::parse2(gen_memento_struct(&restricted_ir, &env)).unwrap();
+        assert_eq!(
+            restricted_memento.vis.to_token_stream().to_string(),
+            quote!(pub(crate)).to_string()
+        );
+
+        let private_input: syn::DeriveInput = parse_quote! {
+            struct PrivateExample {
+                value: u32,
+            }
+        };
+        let private_ir = StructIr::analyze(&private_input).unwrap();
+        let private_memento: syn::ItemStruct =
+            syn::parse2(gen_memento_struct(&private_ir, &env)).unwrap();
+        assert!(matches!(private_memento.vis, syn::Visibility::Inherited));
     }
 }

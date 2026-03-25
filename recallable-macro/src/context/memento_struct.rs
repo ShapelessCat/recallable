@@ -10,13 +10,14 @@ use crate::context::{
 
 pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
     let derives = build_memento_derives(env);
+    let visibility = ir.visibility();
     let memento_name = ir.memento_name();
     let memento_generics = ir.memento_decl_generics();
     let body = build_memento_body(ir, env);
 
     quote! {
         #derives
-        pub struct #memento_name #memento_generics #body
+        #visibility struct #memento_name #memento_generics #body
     }
 }
 

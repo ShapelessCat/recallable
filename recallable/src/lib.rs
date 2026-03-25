@@ -61,6 +61,11 @@ pub use recallable_macro::recallable_model;
 ///
 /// The memento struct mirrors the original but replaces `#[recallable]`-annotated fields
 /// with their `<FieldType as Recallable>::Memento` type and omits `#[recallable(skip)]` fields.
+/// The generated companion type has the same visibility as the input struct.
+/// Its fields are always emitted without visibility modifiers, so they remain private to the
+/// containing module. This is intentional: mementos are meant to be created and consumed alongside
+/// the companion struct, primarily via [`Recall::recall`] and [`TryRecall::try_recall`], with only
+/// occasional same-file testing or debugging use.
 /// For container-like field types, this is whatever memento shape that field type chose; the macro
 /// does not special-case merge semantics.
 /// When the `impl_from` feature is enabled, `#[derive(Recallable)]` also generates

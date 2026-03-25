@@ -50,6 +50,8 @@ pub fn recallable_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// The generated memento type:
 /// - mirrors the original struct shape (named/tuple/unit),
 /// - includes fields unless marked with `#[recallable(skip)]`,
+/// - uses the same visibility as the input struct,
+/// - keeps all generated fields private by omitting field-level visibility modifiers,
 /// - also derives `serde::Deserialize` when the `serde` feature is enabled for the
 ///   macro crate.
 ///
@@ -58,7 +60,9 @@ pub fn recallable_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// semantics; it uses whatever memento shape the field type defines.
 ///
 /// The companion struct itself is generated as an internal implementation detail. The supported
-/// way to name it is `<Struct as Recallable>::Memento`.
+/// way to name it is `<Struct as Recallable>::Memento`. It is intended to be produced and consumed
+/// alongside the source struct, primarily through `Recall::recall`/`TryRecall::try_recall`, not as
+/// a field-inspection surface with widened visibility.
 ///
 /// The `Recallable` impl sets `type Memento` to that generated type and adds any required generic
 /// bounds.

@@ -325,6 +325,11 @@ When you derive `Recallable` on a struct, for instance, `Struct`:
      special-case container types; it uses whatever memento shape the field type defines.
    - Fields marked with `#[recallable(skip)]` are excluded.
    - The left fields are copied directly with their original types.
+   - The generated memento type uses the same visibility as `Struct`, but its fields are always
+     generated without visibility modifiers and therefore remain private to the containing module.
+     This is intentional: mementos are expected to be created and consumed alongside the companion
+     struct, primarily through `Recall::recall` and `TryRecall::try_recall`, not as a public
+     field-inspection surface.
 
 2. **Trait Implementation**: The macro implements `Recallable` for `Struct` and sets
    `type Memento` to that generated companion type (see the API reference for the exact trait
@@ -375,6 +380,12 @@ The generated memento struct derives `Clone`, `Debug`, and `PartialEq`. With the
 feature enabled, it also derives `Deserialize`. For regular fields, the field type must
 implement these traits. For `#[recallable]` fields, the field's memento type
 (`<FieldType as Recallable>::Memento`) must implement them.
+
+The generated memento type uses the same visibility as the source struct. Its fields always remain
+private because the macro does not emit field-level visibility modifiers. This is intentional: the
+supported usage is to pass the value around as `<Struct as Recallable>::Memento`, typically into
+`Recall::recall` or `TryRecall::try_recall`, rather than to rely on field-by-field inspection
+across module boundaries.
 
 Generated mementos retain the source generics that are actually needed by non-skipped fields,
 including const parameters, along with any retained bounds/defaults and filtered `where`
