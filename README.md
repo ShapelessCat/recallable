@@ -113,8 +113,10 @@ cargo run -p recallable --no-default-features --features impl_from --example imp
 Before diving into the examples, be aware of the following constraints:
 
 - **Structs only** — enums and unions are not supported.
-- **No lifetime-parameterized structs** — any struct with a lifetime parameter (e.g. `Foo<'a>`) is rejected, even if
-  no fields borrow data.
+- **Lifetime parameters are allowed only when the generated memento can stay owned** — structs may have lifetime
+  parameters, but any non-skipped field that borrows one of the struct's lifetimes (for example `&'a str` or
+  `Vec<&'a u8>`) is rejected. Skipped borrowed fields and lifetime-only markers such as `PhantomData<&'a T>` are
+  supported because they do not need to appear in the generated memento.
 - **`#[recallable]` is limited to path types** — bare type parameters (`T`), parameterized paths like `Option<T>` and
   `HashMap<K, V>`, module-qualified paths, associated types like `T::Assoc`, and qualified associated types like
   `<T as Trait>::Assoc` are supported. Non-path types such as tuples, arrays, references, slices, and function types
@@ -134,6 +136,9 @@ Before diving into the examples, be aware of the following constraints:
 - **Serde behavior** — with the default `serde` feature:
   - `#[recallable_model]` injects `#[derive(serde::Serialize)]` and adds `#[serde(skip)]` to `#[recallable(skip)]`
     fields. Adding a manual `#[derive(Serialize)]` is a compile error.
+  - Direct `#[derive(Recallable, Recall)]` does **not** inject `serde::Serialize` or add `#[serde(skip)]` to skipped
+    fields on the source struct. If you want serialization to match recalling behavior when using direct derives, add
+    those serde attributes yourself.
   - `#[derive(Recallable)]` makes the memento derive `Deserialize` but not `Serialize`
     (see [Serde Integration](#features) above for the rationale).
   - Serde attributes like `#[serde(rename = "...")]` on the original struct are not forwarded to the memento struct.
@@ -360,6 +365,7 @@ Attribute macro that injects `Recallable` and `Recall` derives for a struct.
 - Adds `#[derive(Recallable, Recall)]` to the target struct.
 - With the default `serde` feature enabled, it also derives `serde::Serialize` and
   applies `#[serde(skip)]` to fields annotated with `#[recallable(skip)]`.
+- Direct `#[derive(Recallable, Recall)]` does not mutate the source struct's serde behavior in those ways.
 
 **Attribute ordering:** `#[recallable_model]` must appear before any attributes it needs
 to inspect. An attribute macro's input only contains attributes that follow it in source
@@ -373,7 +379,8 @@ Generates a companion memento type, exposed as `<Struct as Recallable>::Memento`
 **Requirements:**
 
 - Must be applied to a struct (not enums or unions)
-- Does not support lifetime-parameterized structs
+- Supports lifetime-parameterized structs only when all non-skipped state fields remain owned in the generated
+  memento; non-skipped borrowed fields are rejected
 - Works with named, unnamed (tuple), and unit structs
 
 The generated memento struct derives `Clone`, `Debug`, and `PartialEq`. With the `serde`
@@ -401,7 +408,8 @@ Derives the `Recall` trait implementation for a struct.
 **Requirements:**
 
 - Must be applied to a struct (not enums or unions)
-- Does not support lifetime-parameterized structs
+- Supports lifetime-parameterized structs only when all non-skipped state fields remain owned in the generated
+  memento; non-skipped borrowed fields are rejected
 - Works with named, unnamed (tuple), and unit structs
 - The target type must implement `Recallable` (derive it or implement manually)
 
@@ -450,13 +458,13 @@ A fallible variant of `Recall` for cases where applying a memento might fail.
 
 ```rust
 pub trait TryRecall: Recallable {
-    type Error: std::error::Error + Send + Sync + 'static;
+    type Error: core::error::Error + Send + Sync + 'static;
     fn try_recall(&mut self, memento: Self::Memento) -> Result<(), Self::Error>;
 }
 ```
 
 - `try_recall`: Applies the memento, returning a `Result`. A blanket implementation exists for all types that implement
-  `Recall` (where `Error` is `std::convert::Infallible`).
+  `Recall` (where `Error` is `core::convert::Infallible`).
 
 ## Contributing
 
