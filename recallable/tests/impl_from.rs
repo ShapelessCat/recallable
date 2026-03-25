@@ -35,6 +35,17 @@ struct Outer<InnerType> {
 #[derive(Clone, Debug, PartialEq)]
 struct TupleOuter<InnerType>(#[recallable] InnerType, u32);
 
+#[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+struct TuplePathWrapper<Leaf>(
+    #[recallable] path_nested::Leaf,
+    #[recallable(skip)] PhantomData<Leaf>,
+);
+
+#[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+struct TupleRetainedMarkerOuter<T, U>(T, #[recallable(skip)] PhantomData<U>)
+where
+    T: Clone + From<U>;
+
 #[recallable_model]
 #[derive(Clone, Debug, PartialEq)]
 struct UnitOuter;
@@ -113,6 +124,27 @@ fn test_recallable_field_with_multi_segment_path_type() {
         leaf: path_nested::Leaf { value: 0 },
         marker: PhantomData::<u32>,
     };
+    target.recall(memento);
+    assert_eq!(target, original);
+}
+
+#[test]
+fn test_tuple_recallable_field_with_multi_segment_path_type() {
+    let original = TuplePathWrapper(path_nested::Leaf { value: 42 }, PhantomData::<u32>);
+    let memento: <TuplePathWrapper<u32> as Recallable>::Memento = original.clone().into();
+    let mut target = TuplePathWrapper(path_nested::Leaf { value: 0 }, PhantomData::<u32>);
+
+    target.recall(memento);
+    assert_eq!(target, original);
+}
+
+#[test]
+fn test_tuple_from_builds_synthetic_marker_for_retained_skipped_generic() {
+    let original = TupleRetainedMarkerOuter("ready".to_string(), PhantomData::<&'static str>);
+    let memento: <TupleRetainedMarkerOuter<String, &'static str> as Recallable>::Memento =
+        original.clone().into();
+    let mut target = TupleRetainedMarkerOuter(String::new(), PhantomData::<&'static str>);
+
     target.recall(memento);
     assert_eq!(target, original);
 }
