@@ -65,10 +65,9 @@ fn collect_memento_fields(
     shape: StructShape,
 ) -> Vec<TokenStream2> {
     let recallable_trait = &env.recallable_trait;
-    let generic_type_params = collect_generic_type_params(ir);
     let mut fields: Vec<_> = ir
         .memento_fields()
-        .map(|field| build_memento_field(field, recallable_trait, &generic_type_params))
+        .map(|field| build_memento_field(field, recallable_trait, ir.generic_type_param_idents()))
         .collect();
 
     if let Some(marker_ty) = ir.synthetic_marker_type() {
@@ -76,10 +75,6 @@ fn collect_memento_fields(
     }
 
     fields
-}
-
-fn collect_generic_type_params<'a>(ir: &'a StructIr<'a>) -> HashSet<&'a Ident> {
-    ir.type_params().map(|param| &param.ident).collect()
 }
 
 fn build_marker_field(
