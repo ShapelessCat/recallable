@@ -37,7 +37,7 @@ CI runs the test matrix on stable and validates the MSRV on Rust 1.88.0. Coverag
 
 - `lib.rs` — three entry points: `#[recallable_model]` attribute macro, `#[derive(Recallable)]`, `#[derive(Recall)]`
 - `model_macro.rs` — `#[recallable_model]` expansion: injects derives, detects duplicate `Serialize`, adds `#[serde(skip)]`
-- `context.rs` — `StructIr` (semantic IR) and `CodegenEnv` (feature flags + crate paths); all analysis and IR types live here
+- `context.rs` — `StructIr` (semantic IR), `CodegenEnv` (crate paths), `MementoTraitSpec` (derive/bound logic); all analysis and IR types live here
 - `context/memento_struct.rs` — generates the companion `{Name}Memento` struct
 - `context/recallable_impl.rs` — generates `Recallable` trait impl
 - `context/recall_impl.rs` — generates `Recall` trait impl
@@ -46,7 +46,8 @@ CI runs the test matrix on stable and validates the MSRV on Rust 1.88.0. Coverag
 #### IR types in `context.rs`
 
 - `StructIr` — the sole IR; built by `StructIr::analyze()` from `DeriveInput`. Holds fields, generics plan, memento name, visibility, shape
-- `CodegenEnv` — resolved once per invocation: crate paths, `serde_enabled`, `impl_from_enabled`
+- `CodegenEnv` — resolved once per invocation: crate paths only (`recallable_trait`, `recall_trait`)
+- `MementoTraitSpec` — centralizes memento derive attributes and trait bounds (common traits + optional serde)
 - `FieldIr` — per-field: strategy (`Skip`/`StoreAsSelf`/`StoreAsMemento`), member accessor, memento index
 - `StructShape` — `Named`/`Unnamed`/`Unit`
 - `FieldStrategy` — `Skip`/`StoreAsSelf`/`StoreAsMemento`
@@ -54,7 +55,7 @@ CI runs the test matrix on stable and validates the MSRV on Rust 1.88.0. Coverag
 - `GenericDependencyCollector` — `syn::Visit` walker that collects which generic params a type/predicate depends on
 - `LifetimeUsageChecker` — `syn::Visit` walker that detects struct lifetime usage in field types
 
-Code generation is free functions (`gen_memento_struct`, `gen_recallable_impl`, `gen_recall_impl`, `gen_from_impl`) that take `&StructIr` + `&CodegenEnv`.
+Code generation is free functions (`gen_memento_struct`, `gen_recallable_impl`, `gen_recall_impl`, `gen_from_impl`) that take `&StructIr` + `&CodegenEnv`. Feature flags (`SERDE_ENABLED`, `IMPL_FROM_ENABLED`) are module-level constants in `context.rs`, not part of `CodegenEnv`.
 
 ### Code generation patterns
 
@@ -115,7 +116,7 @@ struct Foo { ... }
 
 ### trybuild feature flags
 
-`IS_SERDE_ENABLED` is a feature on `recallable-macro`, not `recallable`. trybuild compiles test files with `recallable` at `default-features = false`, but `recallable-macro` uses its own defaults (serde enabled). Wrap serde-specific `compile_fail` entries in `#[cfg(feature = "serde")]` so they only run when the test binary is compiled with serde.
+`SERDE_ENABLED` is a feature on `recallable-macro`, not `recallable`. trybuild compiles test files with `recallable` at `default-features = false`, but `recallable-macro` uses its own defaults (serde enabled). Wrap serde-specific `compile_fail` entries in `#[cfg(feature = "serde")]` so they only run when the test binary is compiled with serde.
 
 ## Code Style
 
