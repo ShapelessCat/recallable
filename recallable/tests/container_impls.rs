@@ -51,12 +51,23 @@ impl<T: Recall> Recall for ZippedVec<T> {
     }
 }
 
+impl<T> From<ZippedVec<T>> for Vec<T::Memento>
+where
+    T: Recallable,
+    T::Memento: From<T>,
+{
+    fn from(value: ZippedVec<T>) -> Self {
+        value.0.into_iter().map(Into::into).collect()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
 struct ReplacingOptionOuter {
     #[recallable]
     inner: ReplacingOption<Counter>,
 }
 
+#[cfg(not(feature = "impl_from"))]
 #[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
 struct SelectiveOptionOuter {
     #[recallable]
@@ -109,6 +120,7 @@ fn derived_outers_accept_multiple_container_memento_shapes() {
 
     let _: fn(&mut ReplacingOptionOuter, <ReplacingOptionOuter as Recallable>::Memento) =
         <ReplacingOptionOuter as Recall>::recall;
+    #[cfg(not(feature = "impl_from"))]
     let _: fn(&mut SelectiveOptionOuter, <SelectiveOptionOuter as Recallable>::Memento) =
         <SelectiveOptionOuter as Recall>::recall;
     let _: fn(&mut ZippedVecOuter, <ZippedVecOuter as Recallable>::Memento) =
