@@ -186,6 +186,7 @@ pub(crate) struct StructIr<'a> {
     pub(crate) shape: StructShape,
     fields: Vec<FieldIr<'a>>,
     memento_name: Ident,
+    generic_type_param_idents: HashSet<&'a Ident>,
     generic_params: Vec<GenericParamPlan<'a>>,
     memento_where_clause: Option<WhereClause>,
     marker_param_indices: Vec<usize>,
@@ -200,6 +201,11 @@ impl<'a> StructIr<'a> {
         let shape = StructShape::from_fields(fields);
         let memento_name = quote::format_ident!("{}Memento", input.ident);
         let generic_lookup = GenericParamLookup::new(&input.generics);
+        let generic_type_param_idents = input
+            .generics
+            .type_params()
+            .map(|param| &param.ident)
+            .collect();
         let (usage, field_irs) = collect_field_irs(fields, &struct_lifetimes, &generic_lookup)?;
         let (generic_params, memento_where_clause) =
             plan_memento_generics(&input.generics, usage, &generic_lookup);
@@ -212,6 +218,7 @@ impl<'a> StructIr<'a> {
             shape,
             fields: field_irs,
             memento_name,
+            generic_type_param_idents,
             generic_params,
             memento_where_clause,
             marker_param_indices,
@@ -233,8 +240,8 @@ impl<'a> StructIr<'a> {
         impl_generics
     }
 
-    pub(crate) fn type_params(&self) -> impl Iterator<Item = &syn::TypeParam> {
-        self.generics.type_params()
+    pub(crate) fn generic_type_param_idents(&self) -> &HashSet<&'a Ident> {
+        &self.generic_type_param_idents
     }
 
     pub(crate) fn memento_decl_generics(&self) -> TokenStream2 {
@@ -322,14 +329,13 @@ impl<'a> StructIr<'a> {
     }
 
     fn whole_type_bound_targets(&self) -> Vec<&Type> {
-        let generic_type_params: HashSet<&Ident> = self.type_params().map(|p| &p.ident).collect();
         let mut seen = HashSet::new();
 
         self.fields
             .iter()
             .filter_map(|field| match field.strategy {
                 FieldStrategy::StoreAsMemento
-                    if !is_generic_type_param(field.ty, &generic_type_params)
+                    if !is_generic_type_param(field.ty, &self.generic_type_param_idents)
                         && seen.insert(field.ty) =>
                 {
                     Some(field.ty)
@@ -1216,7 +1222,6 @@ mod tests {
         let memento_trait_bounds = env.memento_trait_bounds();
         let whole_type_memento_bounds: Vec<_> = ir
             .whole_type_memento_bounds(&env.recallable_trait, &memento_trait_bounds)
-            .into_iter()
             .map(|predicate| predicate.to_token_stream().to_string())
             .collect();
         assert_eq!(
@@ -1230,7 +1235,6 @@ mod tests {
 
         let whole_type_from_bounds: Vec<_> = ir
             .whole_type_from_bounds(&env.recallable_trait)
-            .into_iter()
             .map(|predicate| predicate.to_token_stream().to_string())
             .collect();
         let wrapper_memento_from_bound: syn::WherePredicate = parse_quote! {
