@@ -3,17 +3,17 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Fields, ItemStruct, parse_macro_input, parse_quote};
 
-use crate::context::{IS_SERDE_ENABLED, crate_path, has_recallable_skip_attr};
+use crate::context::{SERDE_ENABLED, crate_path, has_recallable_skip_attr};
 
 pub(crate) fn expand(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let crate_path = crate_path();
     let mut input = parse_macro_input!(item as ItemStruct);
 
-    if IS_SERDE_ENABLED && let Err(e) = check_no_serialize_derive(&input.attrs) {
+    if SERDE_ENABLED && let Err(e) = check_no_serialize_derive(&input.attrs) {
         return e.to_compile_error().into();
     }
 
-    let derives = if IS_SERDE_ENABLED {
+    let derives = if SERDE_ENABLED {
         parse_quote! {
             #[derive(#crate_path::Recallable, #crate_path::Recall, ::serde::Serialize)]
         }
@@ -25,7 +25,7 @@ pub(crate) fn expand(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     input.attrs.push(derives);
 
-    if IS_SERDE_ENABLED {
+    if SERDE_ENABLED {
         add_serde_skip_attrs(&mut input.fields);
     }
 
@@ -43,7 +43,7 @@ fn add_serde_skip_attrs(fields: &mut Fields) {
 /// Returns an error if any existing `#[derive(...)]` attribute on the struct
 /// already includes a serde-backed `Serialize` derive.
 ///
-/// Called only when `IS_SERDE_ENABLED` is true, before `#[recallable_model]`
+/// Called only when `SERDE_ENABLED` is true, before `#[recallable_model]`
 /// injects its own `::serde::Serialize` derive.
 fn check_no_serialize_derive(attrs: &[syn::Attribute]) -> syn::Result<()> {
     for attr in attrs {
