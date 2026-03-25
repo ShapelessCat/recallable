@@ -3,8 +3,8 @@
 //! [`StructIr::analyze`] parses a `DeriveInput` into a [`StructIr`] — the
 //! semantic intermediate representation that drives all code generation.
 //!
-//! [`CodegenEnv`] captures environment configuration (crate paths, feature
-//! flags) resolved once per macro invocation.
+//! [`CodegenEnv`] captures environment configuration that depends on crate-path
+//! resolution for a single macro invocation.
 //!
 //! Code generation is split into free functions in submodules:
 //! - [`gen_memento_struct`] — companion memento struct definition
@@ -33,7 +33,8 @@ use syn::{
     ImplGenerics, Index, Meta, PathArguments, Type, Visibility, WhereClause, WherePredicate,
 };
 
-pub const IS_SERDE_ENABLED: bool = cfg!(feature = "serde");
+pub(crate) const SERDE_ENABLED: bool = cfg!(feature = "serde");
+pub(crate) const IMPL_FROM_ENABLED: bool = cfg!(feature = "impl_from");
 
 const RECALLABLE: &str = "recallable";
 
@@ -155,6 +156,10 @@ impl MementoTraitSpec {
         }
     }
 
+    pub(crate) fn current() -> Self {
+        Self::new(SERDE_ENABLED)
+    }
+
     pub(crate) fn derive_attr(&self) -> TokenStream2 {
         let mut derive_traits = self.common_traits.clone();
         if let Some(serde_derive_trait) = &self.serde_derive_trait {
@@ -179,10 +184,6 @@ pub(crate) struct CodegenEnv {
     pub(crate) recallable_trait: TokenStream2,
     /// Fully qualified path to the `Recall` trait.
     pub(crate) recall_trait: TokenStream2,
-    /// Whether the `serde` feature is enabled on the macro crate.
-    pub(crate) serde_enabled: bool,
-    /// Whether the `impl_from` feature is enabled on the macro crate.
-    pub(crate) impl_from_enabled: bool,
 }
 
 impl CodegenEnv {
@@ -191,13 +192,7 @@ impl CodegenEnv {
         Self {
             recallable_trait: quote! { #crate_path::Recallable },
             recall_trait: quote! { #crate_path::Recall },
-            serde_enabled: IS_SERDE_ENABLED,
-            impl_from_enabled: cfg!(feature = "impl_from"),
         }
-    }
-
-    pub(crate) fn memento_trait_spec(&self) -> MementoTraitSpec {
-        MementoTraitSpec::new(self.serde_enabled)
     }
 }
 
@@ -425,8 +420,15 @@ impl<'a> StructIr<'a> {
 }
 
 fn collect_shared_memento_bounds(ir: &StructIr, env: &CodegenEnv) -> Vec<WherePredicate> {
+    collect_shared_memento_bounds_with_spec(ir, env, &MementoTraitSpec::current())
+}
+
+fn collect_shared_memento_bounds_with_spec(
+    ir: &StructIr,
+    env: &CodegenEnv,
+    memento_trait_spec: &MementoTraitSpec,
+) -> Vec<WherePredicate> {
     let recallable_trait = &env.recallable_trait;
-    let memento_trait_spec = env.memento_trait_spec();
     let memento_trait_bounds = memento_trait_spec.common_bound_tokens();
 
     let mut bounds = ir.recallable_memento_bounds(&memento_trait_bounds);
@@ -443,7 +445,17 @@ fn collect_recall_like_bounds(
     env: &CodegenEnv,
     direct_bound: &TokenStream2,
 ) -> Vec<WherePredicate> {
-    let shared_memento_bounds = collect_shared_memento_bounds(ir, env);
+    collect_recall_like_bounds_with_spec(ir, env, direct_bound, &MementoTraitSpec::current())
+}
+
+fn collect_recall_like_bounds_with_spec(
+    ir: &StructIr,
+    env: &CodegenEnv,
+    direct_bound: &TokenStream2,
+    memento_trait_spec: &MementoTraitSpec,
+) -> Vec<WherePredicate> {
+    let shared_memento_bounds =
+        collect_shared_memento_bounds_with_spec(ir, env, memento_trait_spec);
     let shared_param_bound_count = ir.recallable_params().count();
 
     let mut bounds = ir.recallable_bounds(direct_bound);
@@ -1049,8 +1061,9 @@ mod tests {
     use syn::parse_quote;
 
     use super::{
-        CodegenEnv, StructIr, classify_recallable_field_type, collect_recall_like_bounds,
-        collect_shared_memento_bounds, gen_memento_struct, is_phantom_data,
+        CodegenEnv, MementoTraitSpec, StructIr, classify_recallable_field_type,
+        collect_recall_like_bounds_with_spec, collect_shared_memento_bounds_with_spec,
+        gen_memento_struct, is_phantom_data,
     };
 
     #[test]
@@ -1179,14 +1192,13 @@ mod tests {
         let env = CodegenEnv {
             recallable_trait: quote!(::recallable::Recallable),
             recall_trait: quote!(::recallable::Recall),
-            serde_enabled: true,
-            impl_from_enabled: true,
         };
 
-        let shared_bounds: Vec<_> = collect_shared_memento_bounds(&ir, &env)
-            .into_iter()
-            .map(|predicate| predicate.to_token_stream().to_string())
-            .collect();
+        let shared_bounds: Vec<_> =
+            collect_shared_memento_bounds_with_spec(&ir, &env, &MementoTraitSpec::new(true))
+                .into_iter()
+                .map(|predicate| predicate.to_token_stream().to_string())
+                .collect();
         assert_eq!(
             shared_bounds,
             vec![
@@ -1203,10 +1215,15 @@ mod tests {
             ]
         );
 
-        let recall_like_bounds: Vec<_> = collect_recall_like_bounds(&ir, &env, &env.recall_trait)
-            .into_iter()
-            .map(|predicate| predicate.to_token_stream().to_string())
-            .collect();
+        let recall_like_bounds: Vec<_> = collect_recall_like_bounds_with_spec(
+            &ir,
+            &env,
+            &env.recall_trait,
+            &MementoTraitSpec::new(true),
+        )
+        .into_iter()
+        .map(|predicate| predicate.to_token_stream().to_string())
+        .collect();
         assert_eq!(
             recall_like_bounds,
             vec![
@@ -1242,8 +1259,6 @@ mod tests {
         let env = CodegenEnv {
             recallable_trait: quote!(::recallable::Recallable),
             recall_trait: quote!(::recallable::Recall),
-            serde_enabled: true,
-            impl_from_enabled: true,
         };
 
         let whole_type_bounds: Vec<_> = ir
@@ -1256,7 +1271,7 @@ mod tests {
             vec![quote!(Wrapper<T>: ::recallable::Recallable).to_string()]
         );
 
-        let memento_trait_bounds = env.memento_trait_spec().common_bound_tokens();
+        let memento_trait_bounds = MementoTraitSpec::new(true).common_bound_tokens();
         let whole_type_memento_bounds: Vec<_> = ir
             .whole_type_memento_bounds(&env.recallable_trait, &memento_trait_bounds)
             .map(|predicate| predicate.to_token_stream().to_string())
@@ -1286,11 +1301,15 @@ mod tests {
             ]
         );
 
-        let recall_like_bounds: Vec<_> =
-            collect_recall_like_bounds(&ir, &env, &env.recallable_trait)
-                .into_iter()
-                .map(|predicate| predicate.to_token_stream().to_string())
-                .collect();
+        let recall_like_bounds: Vec<_> = collect_recall_like_bounds_with_spec(
+            &ir,
+            &env,
+            &env.recallable_trait,
+            &MementoTraitSpec::new(true),
+        )
+        .into_iter()
+        .map(|predicate| predicate.to_token_stream().to_string())
+        .collect();
         assert_eq!(
             recall_like_bounds,
             vec![
@@ -1315,8 +1334,6 @@ mod tests {
         let env = CodegenEnv {
             recallable_trait: quote!(::recallable::Recallable),
             recall_trait: quote!(::recallable::Recall),
-            serde_enabled: true,
-            impl_from_enabled: true,
         };
 
         let restricted_input: syn::DeriveInput = parse_quote! {
@@ -1345,35 +1362,16 @@ mod tests {
 
     #[test]
     fn memento_trait_spec_formats_derives_for_serde_modes() {
-        let input: syn::DeriveInput = parse_quote! {
-            struct Example {
-                value: u32,
-            }
-        };
-        let ir = StructIr::analyze(&input).unwrap();
+        let serde_derives = MementoTraitSpec::new(true).derive_attr().to_string();
+        assert!(serde_derives.contains(":: core :: clone :: Clone"));
+        assert!(serde_derives.contains(":: core :: fmt :: Debug"));
+        assert!(serde_derives.contains(":: core :: cmp :: PartialEq"));
+        assert!(serde_derives.contains(":: serde :: Deserialize"));
 
-        let serde_env = CodegenEnv {
-            recallable_trait: quote!(::recallable::Recallable),
-            recall_trait: quote!(::recallable::Recall),
-            serde_enabled: true,
-            impl_from_enabled: true,
-        };
-        let serde_memento = gen_memento_struct(&ir, &serde_env).to_string();
-        assert!(serde_memento.contains(":: core :: clone :: Clone"));
-        assert!(serde_memento.contains(":: core :: fmt :: Debug"));
-        assert!(serde_memento.contains(":: core :: cmp :: PartialEq"));
-        assert!(serde_memento.contains(":: serde :: Deserialize"));
-
-        let no_serde_env = CodegenEnv {
-            recallable_trait: quote!(::recallable::Recallable),
-            recall_trait: quote!(::recallable::Recall),
-            serde_enabled: false,
-            impl_from_enabled: true,
-        };
-        let no_serde_memento = gen_memento_struct(&ir, &no_serde_env).to_string();
-        assert!(no_serde_memento.contains(":: core :: clone :: Clone"));
-        assert!(no_serde_memento.contains(":: core :: fmt :: Debug"));
-        assert!(no_serde_memento.contains(":: core :: cmp :: PartialEq"));
-        assert!(!no_serde_memento.contains(":: serde :: Deserialize"));
+        let no_serde_derives = MementoTraitSpec::new(false).derive_attr().to_string();
+        assert!(no_serde_derives.contains(":: core :: clone :: Clone"));
+        assert!(no_serde_derives.contains(":: core :: fmt :: Debug"));
+        assert!(no_serde_derives.contains(":: core :: cmp :: PartialEq"));
+        assert!(!no_serde_derives.contains(":: serde :: Deserialize"));
     }
 }

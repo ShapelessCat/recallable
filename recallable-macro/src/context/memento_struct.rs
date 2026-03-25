@@ -4,12 +4,12 @@ use std::collections::HashSet;
 use syn::{Ident, WhereClause, WherePredicate};
 
 use crate::context::{
-    CodegenEnv, FieldIr, FieldMember, FieldStrategy, StructIr, StructShape,
-    collect_recall_like_bounds, is_generic_type_param,
+    CodegenEnv, FieldIr, FieldMember, FieldStrategy, MementoTraitSpec, SERDE_ENABLED, StructIr,
+    StructShape, collect_recall_like_bounds, is_generic_type_param,
 };
 
 pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
-    let derives = env.memento_trait_spec().derive_attr();
+    let derives = MementoTraitSpec::current().derive_attr();
     let visibility = ir.visibility();
     let memento_name = ir.memento_name();
     let memento_generics = ir.memento_decl_generics();
@@ -64,20 +64,14 @@ fn collect_memento_fields(
         .collect();
 
     if let Some(marker_ty) = ir.synthetic_marker_type() {
-        fields.push(build_marker_field(&marker_ty, shape, env));
+        fields.push(build_marker_field(&marker_ty, shape));
     }
 
     fields
 }
 
-fn build_marker_field(
-    marker_ty: &TokenStream2,
-    shape: StructShape,
-    env: &CodegenEnv,
-) -> TokenStream2 {
-    let serde_attr = env
-        .serde_enabled
-        .then_some(quote! { #[serde(skip, default)] });
+fn build_marker_field(marker_ty: &TokenStream2, shape: StructShape) -> TokenStream2 {
+    let serde_attr = SERDE_ENABLED.then_some(quote! { #[serde(skip, default)] });
 
     match shape {
         StructShape::Named => quote! {
