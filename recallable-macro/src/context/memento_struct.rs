@@ -9,7 +9,7 @@ use crate::context::{
 };
 
 pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
-    let derives = build_memento_derives(env);
+    let derives = env.memento_trait_spec().derive_attr();
     let visibility = ir.visibility();
     let memento_name = ir.memento_name();
     let memento_generics = ir.memento_decl_generics();
@@ -18,14 +18,6 @@ pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv) -> TokenStream
     quote! {
         #derives
         #visibility struct #memento_name #memento_generics #body
-    }
-}
-
-fn build_memento_derives(env: &CodegenEnv) -> TokenStream2 {
-    if env.serde_enabled {
-        quote! { #[derive(::core::clone::Clone, ::core::fmt::Debug, ::core::cmp::PartialEq, ::serde::Deserialize)] }
-    } else {
-        quote! { #[derive(::core::clone::Clone, ::core::fmt::Debug, ::core::cmp::PartialEq)] }
     }
 }
 
