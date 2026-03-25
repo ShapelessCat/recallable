@@ -313,20 +313,28 @@ impl<'a> StructIr<'a> {
             .collect()
     }
 
-    pub(crate) fn whole_type_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
+    fn whole_type_bound_targets(&self) -> Vec<&Type> {
         let generic_type_params: HashSet<&Ident> = self.type_params().map(|p| &p.ident).collect();
+        let mut seen = HashSet::new();
 
         self.fields
             .iter()
             .filter_map(|field| match field.strategy {
                 FieldStrategy::StoreAsMemento
-                    if !is_generic_type_param(field.ty, &generic_type_params) =>
+                    if !is_generic_type_param(field.ty, &generic_type_params)
+                        && seen.insert(field.ty) =>
                 {
-                    let ty = field.ty;
-                    Some(syn::parse_quote! { #ty: #bound })
+                    Some(field.ty)
                 }
                 _ => None,
             })
+            .collect()
+    }
+
+    pub(crate) fn whole_type_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
+        self.whole_type_bound_targets()
+            .into_iter()
+            .map(|ty| syn::parse_quote! { #ty: #bound })
             .collect()
     }
 
@@ -335,19 +343,9 @@ impl<'a> StructIr<'a> {
         recallable_trait: &TokenStream2,
         bound: &TokenStream2,
     ) -> Vec<WherePredicate> {
-        let generic_type_params: HashSet<&Ident> = self.type_params().map(|p| &p.ident).collect();
-
-        self.fields
-            .iter()
-            .filter_map(|field| match field.strategy {
-                FieldStrategy::StoreAsMemento
-                    if !is_generic_type_param(field.ty, &generic_type_params) =>
-                {
-                    let ty = field.ty;
-                    Some(syn::parse_quote! { <#ty as #recallable_trait>::Memento: #bound })
-                }
-                _ => None,
-            })
+        self.whole_type_bound_targets()
+            .into_iter()
+            .map(|ty| syn::parse_quote! { <#ty as #recallable_trait>::Memento: #bound })
             .collect()
     }
 
@@ -355,21 +353,13 @@ impl<'a> StructIr<'a> {
         &self,
         recallable_trait: &TokenStream2,
     ) -> Vec<WherePredicate> {
-        let generic_type_params: HashSet<&Ident> = self.type_params().map(|p| &p.ident).collect();
-
-        self.fields
-            .iter()
-            .filter_map(|field| match field.strategy {
-                FieldStrategy::StoreAsMemento
-                    if !is_generic_type_param(field.ty, &generic_type_params) =>
-                {
-                    let ty = field.ty;
-                    Some([
-                        syn::parse_quote! { #ty: #recallable_trait },
-                        syn::parse_quote! { <#ty as #recallable_trait>::Memento: ::core::convert::From<#ty> },
-                    ])
-                }
-                _ => None,
+        self.whole_type_bound_targets()
+            .into_iter()
+            .map(|ty| {
+                [
+                    syn::parse_quote! { #ty: #recallable_trait },
+                    syn::parse_quote! { <#ty as #recallable_trait>::Memento: ::core::convert::From<#ty> },
+                ]
             })
             .flatten()
             .collect()
@@ -1162,6 +1152,92 @@ mod tests {
                 .to_string(),
                 quote!(<Option<U> as ::recallable::Recallable>::Memento: ::serde::de::DeserializeOwned)
                     .to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn whole_type_bound_helpers_deduplicate_repeated_types() {
+        let input: syn::DeriveInput = parse_quote! {
+            struct Example<T> {
+                #[recallable]
+                current: T,
+                #[recallable]
+                first: Wrapper<T>,
+                #[recallable]
+                second: Wrapper<T>,
+            }
+        };
+        let ir = StructIr::analyze(&input).unwrap();
+        let env = CodegenEnv {
+            recallable_trait: quote!(::recallable::Recallable),
+            recall_trait: quote!(::recallable::Recall),
+            serde_enabled: true,
+            impl_from_enabled: true,
+        };
+
+        let whole_type_bounds: Vec<_> = ir
+            .whole_type_bounds(&env.recallable_trait)
+            .into_iter()
+            .map(|predicate| predicate.to_token_stream().to_string())
+            .collect();
+        assert_eq!(
+            whole_type_bounds,
+            vec![quote!(Wrapper<T>: ::recallable::Recallable).to_string()]
+        );
+
+        let memento_trait_bounds = env.memento_trait_bounds();
+        let whole_type_memento_bounds: Vec<_> = ir
+            .whole_type_memento_bounds(&env.recallable_trait, &memento_trait_bounds)
+            .into_iter()
+            .map(|predicate| predicate.to_token_stream().to_string())
+            .collect();
+        assert_eq!(
+            whole_type_memento_bounds,
+            vec![
+                quote!(<Wrapper<T> as ::recallable::Recallable>::Memento:
+                    ::core::clone::Clone + ::core::fmt::Debug + ::core::cmp::PartialEq)
+                .to_string()
+            ]
+        );
+
+        let whole_type_from_bounds: Vec<_> = ir
+            .whole_type_from_bounds(&env.recallable_trait)
+            .into_iter()
+            .map(|predicate| predicate.to_token_stream().to_string())
+            .collect();
+        let wrapper_memento_from_bound: syn::WherePredicate = parse_quote! {
+            <Wrapper<T> as ::recallable::Recallable>::Memento:
+                ::core::convert::From<Wrapper<T>>
+        };
+        assert_eq!(
+            whole_type_from_bounds,
+            vec![
+                quote!(Wrapper<T>: ::recallable::Recallable).to_string(),
+                wrapper_memento_from_bound.to_token_stream().to_string(),
+            ]
+        );
+
+        let recall_like_bounds: Vec<_> =
+            collect_recall_like_bounds(&ir, &env, &env.recallable_trait)
+                .into_iter()
+                .map(|predicate| predicate.to_token_stream().to_string())
+                .collect();
+        assert_eq!(
+            recall_like_bounds,
+            vec![
+                quote!(T: ::recallable::Recallable).to_string(),
+                quote!(T::Memento: ::core::clone::Clone
+                    + ::core::fmt::Debug
+                    + ::core::cmp::PartialEq)
+                .to_string(),
+                quote!(Wrapper<T>: ::recallable::Recallable).to_string(),
+                quote!(<Wrapper<T> as ::recallable::Recallable>::Memento:
+                    ::core::clone::Clone + ::core::fmt::Debug + ::core::cmp::PartialEq)
+                .to_string(),
+                quote!(<Wrapper<T> as ::recallable::Recallable>::Memento:
+                    ::serde::de::DeserializeOwned)
+                .to_string(),
             ]
         );
     }
