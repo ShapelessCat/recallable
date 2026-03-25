@@ -355,13 +355,12 @@ impl<'a> StructIr<'a> {
     ) -> Vec<WherePredicate> {
         self.whole_type_bound_targets()
             .into_iter()
-            .map(|ty| {
+            .flat_map(|ty| {
                 [
                     syn::parse_quote! { #ty: #recallable_trait },
                     syn::parse_quote! { <#ty as #recallable_trait>::Memento: ::core::convert::From<#ty> },
                 ]
             })
-            .flatten()
             .collect()
     }
 
@@ -968,6 +967,15 @@ impl<'ast> Visit<'ast> for LifetimeUsageChecker<'_> {
     }
 }
 
+/// Heuristically detects PhantomData-shaped field types during analysis.
+///
+/// This matches any path type whose final segment is `PhantomData`, so it accepts
+/// `PhantomData`, `marker::PhantomData`, `core::marker::PhantomData`,
+/// `::core::marker::PhantomData`, `std::marker::PhantomData`, and
+/// `::std::marker::PhantomData`.
+///
+/// Because proc macros cannot resolve types, this also intentionally matches any
+/// user-defined type whose final path segment is `PhantomData`.
 fn is_phantom_data(ty: &Type) -> bool {
     if let Type::Path(type_path) = ty {
         type_path
@@ -996,7 +1004,7 @@ mod tests {
 
     use super::{
         CodegenEnv, StructIr, classify_recallable_field_type, collect_recall_like_bounds,
-        collect_shared_memento_bounds,
+        collect_shared_memento_bounds, is_phantom_data,
     };
 
     #[test]
@@ -1092,6 +1100,22 @@ mod tests {
             classify_recallable_field_type(&field.ty, &lookup),
             Ok(super::RecallableFieldKind::WholeType)
         ));
+    }
+
+    #[test]
+    fn phantom_data_detection_accepts_common_path_variants() {
+        assert!(is_phantom_data(&parse_quote!(PhantomData<u8>)));
+        assert!(is_phantom_data(&parse_quote!(marker::PhantomData<u8>)));
+        assert!(is_phantom_data(&parse_quote!(
+            core::marker::PhantomData<u8>
+        )));
+        assert!(is_phantom_data(&parse_quote!(
+            ::core::marker::PhantomData<u8>
+        )));
+        assert!(is_phantom_data(&parse_quote!(std::marker::PhantomData<u8>)));
+        assert!(is_phantom_data(&parse_quote!(
+            ::std::marker::PhantomData<u8>
+        )));
     }
 
     #[test]
