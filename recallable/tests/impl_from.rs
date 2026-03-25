@@ -4,8 +4,8 @@ use recallable::{Recall, Recallable, recallable_model};
 
 mod path_nested {
     #[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
-    pub struct Leaf {
-        pub value: i32,
+    pub(super) struct Leaf {
+        pub(super) value: i32,
     }
 }
 

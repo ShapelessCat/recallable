@@ -8,8 +8,8 @@ mod nested {
     #[derive(
         Clone, Debug, PartialEq, serde::Deserialize, recallable::Recallable, recallable::Recall,
     )]
-    pub struct Inner {
-        pub value: i32,
+    pub(super) struct Inner {
+        value: i32,
     }
 }
 
