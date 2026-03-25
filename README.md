@@ -17,7 +17,8 @@ Implementing `Recallable` for a struct means specifying its associated memento t
 infallible types work seamlessly in fallible contexts.
 
 Note:
-Each recallable struct has one associated memento type, and each memento corresponds to exactly one struct.
+Each `Recallable` implementation chooses one associated memento type. For container-like types,
+different implementations may reasonably choose different memento shapes and recall behavior.
 
 ## Why Recallable?
 
@@ -66,7 +67,8 @@ The provided procedural macros handle the heavy lifting; they generate companion
 - **Generic Support**: Supports type and const generics, preserves retained bounds/defaults and relevant `where`
   predicates on generated mementos, and infers trait bounds for bare `T` `#[recallable]` fields
 - **Optional `From` Derive**: Enable `From<Struct>` for `<Struct as Recallable>::Memento` with the `impl_from`
-  feature
+  feature. For `#[recallable]` fields, this also requires the field's memento type to implement
+  `From<FieldType>`
 - **Zero Runtime Overhead**: All code generation happens at compile time
 - **`no_std` Support**: Compatible with `no_std` environments (for example, with `postcard` + `heapless`)
 
@@ -122,6 +124,10 @@ Before diving into the examples, be aware of the following constraints:
   implement these traits. For `#[recallable]` fields, it is the field's *memento type*
   (`<FieldType as Recallable>::Memento`) that must implement them. If any required trait is missing, compilation fails
   with an error pointing at generated code.
+- **`impl_from` adds nested `From` requirements** — when the `impl_from` feature is enabled, the derived
+  `From<Struct>` implementation converts each `#[recallable]` field with `Into`, so
+  `<FieldType as Recallable>::Memento` must implement `From<FieldType>`. Some otherwise valid generic container
+  designs cannot satisfy this because of Rust coherence rules.
 - **`#[recallable_model]` attribute ordering** — `#[recallable_model]` must appear *before* any attributes it needs
   to inspect (e.g., before `#[derive(Serialize)]`). Attribute macros only see attributes that follow them in source
   order.
@@ -253,6 +259,9 @@ struct ConstContainer<Closure, const N: usize> {
 
 The macros automatically:
 
+- Use whatever `Recallable::Memento` and `Recall::recall` implementation each `#[recallable]` field type provides.
+  For container-like field types, this means the macro does not prescribe one canonical merge strategy: a field type
+  may replace itself wholesale, selectively update inner values, or apply some other domain-specific behavior.
 - Preserve only the generic parameters used by non-skipped fields, plus any dependencies pulled in by retained bounds,
   defaults, or relevant `where` predicates
 - Keep retained bounds/defaults and filtered `where` clauses on the generated memento
@@ -311,8 +320,9 @@ When you derive `Recallable` on a struct, for instance, `Struct`:
 1. **Companion Memento Type**: The macro generates an internal companion memento struct and exposes
    it as `<Struct as Recallable>::Memento`. That type mirrors the original structure but only
    includes fields that are part of the memento. Here are the rules:
-   - Each field marked with `#[recallable]` in `Struct` are typed with
-     `<FieldType as Recallable>::Memento` in the generated companion type.
+   - Each field marked with `#[recallable]` in `Struct` is typed with
+     `<FieldType as Recallable>::Memento` in the generated companion type. The macro does not
+     special-case container types; it uses whatever memento shape the field type defines.
    - Fields marked with `#[recallable(skip)]` are excluded.
    - The left fields are copied directly with their original types.
 
@@ -328,7 +338,8 @@ When you derive `Recall` on a struct:
 
 1. **Recall Method**: The `recall` method updates the struct:
    - Regular fields are directly assigned from the memento
-   - `#[recallable]` fields are recursively recalled via their own `recall` method
+   - `#[recallable]` fields are recursively recalled via their own `recall` method, so field-level
+     replace/merge behavior comes from the field type's implementation
 
 2. **Trait Implementation**: The macro generates `Recall` implementation for the target struct (see
 API reference for the exact trait definitions).
@@ -369,6 +380,9 @@ Generated mementos retain the source generics that are actually needed by non-sk
 including const parameters, along with any retained bounds/defaults and filtered `where`
 predicates required to keep the memento well-formed.
 
+When the `impl_from` feature is enabled, the generated `From<Struct>` implementation also requires
+`<FieldType as Recallable>::Memento: From<FieldType>` for each `#[recallable]` field.
+
 ### `#[derive(Recall)]`
 
 Derives the `Recall` trait implementation for a struct.
@@ -393,6 +407,9 @@ Marks a field for recursive recalling.
 - Non-path types such as tuples, arrays, references, slices, and function types are not yet
   supported with `#[recallable]`
 
+`#[recallable]` does not impose one canonical container semantics. It simply uses the field
+type's own `Recallable::Memento` and `Recall::recall` implementations.
+
 ### `Recallable` Trait
 
 ```rust
@@ -403,6 +420,8 @@ pub trait Recallable {
 
 - `Memento`: The associated memento type. When `#[derive(Recallable)]` is applied, the generated
   companion struct is an implementation detail; refer its type with `<Type as Recallable>::Memento`.
+  For container-like types, this associated type is intentionally application-defined rather than
+  fixed by the crate.
 
 ### `Recall` Trait
 

@@ -11,6 +11,11 @@
 //! Many systems receive incremental updates where only a subset of fields change or can be
 //! considered part of the state. This crate formalizes this pattern by defining a memento type for
 //! a structure and providing a consistent way to apply such mementos safely.
+//!
+//! The crate intentionally does not prescribe one canonical memento shape for container-like
+//! field types. A type may choose whole-value replacement, selective inner updates, or some other
+//! domain-specific behavior, and the derive macros defer to that type's own
+//! [`Recallable::Memento`] and [`Recall::recall`] implementations.
 
 // Re-export the derive macros.
 #![no_std]
@@ -56,6 +61,11 @@ pub use recallable_macro::recallable_model;
 ///
 /// The memento struct mirrors the original but replaces `#[recallable]`-annotated fields
 /// with their `<FieldType as Recallable>::Memento` type and omits `#[recallable(skip)]` fields.
+/// For container-like field types, this is whatever memento shape that field type chose; the macro
+/// does not special-case merge semantics.
+/// When the `impl_from` feature is enabled, `#[derive(Recallable)]` also generates
+/// `From<Struct>` for the memento type, which requires
+/// `<FieldType as Recallable>::Memento: From<FieldType>` for each `#[recallable]` field.
 ///
 /// This example requires the `serde` feature.
 ///
@@ -93,6 +103,8 @@ pub use recallable_macro::Recallable;
 /// For plain fields, `recall` assigns the memento value directly. For fields annotated
 /// with `#[recallable]`, it recursively calls `recall` on the nested value.
 /// Fields marked `#[recallable(skip)]` are left untouched.
+/// For `#[recallable]` fields, replace/merge behavior comes from the field type's own
+/// [`Recall`] implementation.
 ///
 /// This example requires the `serde` feature.
 ///
@@ -120,6 +132,10 @@ pub use recallable_macro::Recall;
 
 /// A type that declares a companion memento type.
 ///
+/// This trait intentionally does not prescribe one canonical memento shape for container-like
+/// types. For example, one `Option`-like wrapper may choose `Self` as its memento while another
+/// may choose `Option<T::Memento>` and perform selective inner updates.
+///
 /// ## Usage
 ///
 /// ```rust
@@ -144,6 +160,8 @@ pub use recallable_macro::Recall;
 /// // When deriving `Recallable`, a `From<Accumulator>` implementation is generated if the
 /// // `impl_from` feature is enabled. For derived implementations, mark non-state fields with
 /// // `#[recallable(skip)]` (and add `#[serde(skip)]` as needed when using serde).
+/// // For `#[recallable]` fields, the derived `From` impl also requires
+/// // `<FieldType as Recallable>::Memento: From<FieldType>`.
 ///
 /// #[derive(PartialEq, Deserialize)]
 /// pub struct AccumulatorMemento<T> {
@@ -202,6 +220,9 @@ pub trait Recallable {
 }
 
 /// A type that can change state by absorbing one companion memento value.
+///
+/// The meaning of "apply this memento" is type-defined: a [`Recall`] implementation may replace
+/// the whole value, merge fields, or selectively update nested state.
 ///
 /// # Example
 ///
@@ -341,6 +362,8 @@ mod tests {
 
     use super::{Recall, Recallable};
 
+    // These are test-only smoke impls for path-shaped container fields. They intentionally use
+    // whole-value replacement semantics; integration tests cover alternate container semantics.
     impl<T> Recallable for Option<T> {
         type Memento = Self;
     }
