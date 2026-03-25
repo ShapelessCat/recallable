@@ -238,12 +238,12 @@ impl<'a> StructIr<'a> {
     }
 
     pub(crate) fn memento_decl_generics(&self) -> TokenStream2 {
-        let params: Vec<_> = self
+        let params = self
             .generic_params
             .iter()
             .filter(|plan| plan.is_retained())
             .map(GenericParamPlan::decl_param)
-            .collect();
+            .collect::<Vec<_>>();
 
         if params.is_empty() {
             quote! {}
@@ -273,11 +273,10 @@ impl<'a> StructIr<'a> {
             return None;
         }
 
-        let components: Vec<_> = self
+        let components = self
             .marker_param_indices
             .iter()
-            .map(|&index| marker_component(self.generic_params[index].param))
-            .collect();
+            .map(|&index| marker_component(self.generic_params[index].param));
 
         Some(quote! {
             ::core::marker::PhantomData<(#(#components,)*)>
@@ -351,26 +350,24 @@ impl<'a> StructIr<'a> {
         &self,
         recallable_trait: &TokenStream2,
         bound: &TokenStream2,
-    ) -> Vec<WherePredicate> {
+    ) -> impl Iterator<Item = WherePredicate> {
         self.whole_type_bound_targets()
             .into_iter()
-            .map(|ty| syn::parse_quote! { <#ty as #recallable_trait>::Memento: #bound })
-            .collect()
+            .map(move |ty| syn::parse_quote! { <#ty as #recallable_trait>::Memento: #bound })
     }
 
     pub(crate) fn whole_type_from_bounds(
         &self,
         recallable_trait: &TokenStream2,
-    ) -> Vec<WherePredicate> {
+    ) -> impl Iterator<Item = WherePredicate> {
         self.whole_type_bound_targets()
             .into_iter()
-            .flat_map(|ty| {
+            .flat_map(move |ty| {
                 [
                     syn::parse_quote! { #ty: #recallable_trait },
                     syn::parse_quote! { <#ty as #recallable_trait>::Memento: ::core::convert::From<#ty> },
                 ]
             })
-            .collect()
     }
 
     pub(crate) fn extend_where_clause(&self, extra: &[WherePredicate]) -> Option<WhereClause> {
