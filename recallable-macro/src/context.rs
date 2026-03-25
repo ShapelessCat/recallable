@@ -183,7 +183,7 @@ pub(crate) struct FieldIr<'a> {
 pub(crate) struct StructIr<'a> {
     name: &'a Ident,
     generics: &'a Generics,
-    pub(crate) shape: StructShape,
+    shape: StructShape,
     fields: Vec<FieldIr<'a>>,
     memento_name: Ident,
     generic_type_param_idents: HashSet<&'a Ident>,
