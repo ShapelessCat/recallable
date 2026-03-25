@@ -608,23 +608,14 @@ impl<'a> GenericParamLookup<'a> {
     }
 }
 
-/// Analysis-only classification for recalled field types.
-///
-/// This is used to decide whether a recalled field is exactly a generic type
-/// parameter, which affects generic retention and bound generation. It does not
-/// map directly to a distinct downstream `FieldStrategy`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RecallableFieldKind {
-    /// The field type is exactly a plain generic type parameter like `T`.
-    BareTypeParam(usize),
-    /// The field type is any other supported path type.
-    WholeType,
-}
+// Analysis-only classification for recalled field types.
+
+struct BareTypeParam(usize);
 
 fn classify_recallable_field_type(
     field_type: &Type,
     generic_lookup: &GenericParamLookup<'_>,
-) -> syn::Result<RecallableFieldKind> {
+) -> syn::Result<Option<BareTypeParam>> {
     match field_type {
         Type::Path(type_path)
             if type_path.qself.is_none()
@@ -632,13 +623,9 @@ fn classify_recallable_field_type(
                 && matches!(type_path.path.segments[0].arguments, PathArguments::None) =>
         {
             let ident = &type_path.path.segments[0].ident;
-            if let Some(index) = generic_lookup.type_param_index(ident) {
-                Ok(RecallableFieldKind::BareTypeParam(index))
-            } else {
-                Ok(RecallableFieldKind::WholeType)
-            }
+            Ok(generic_lookup.type_param_index(ident).map(BareTypeParam))
         }
-        Type::Path(_) => Ok(RecallableFieldKind::WholeType),
+        Type::Path(_) => Ok(None),
         _ => Err(syn::Error::new_spanned(
             field_type,
             "Only path types are supported here",
@@ -693,7 +680,7 @@ fn collect_field_irs<'a>(
                     &field.ty,
                     generic_lookup,
                 ));
-                if let RecallableFieldKind::BareTypeParam(index) =
+                if let Some(BareTypeParam(index)) =
                     classify_recallable_field_type(&field.ty, generic_lookup)?
                 {
                     usage.recallable_type_params.insert(index);
@@ -1117,7 +1104,7 @@ mod tests {
 
         assert!(matches!(
             classify_recallable_field_type(&field.ty, &lookup),
-            Ok(super::RecallableFieldKind::WholeType)
+            Ok(None)
         ));
     }
 
