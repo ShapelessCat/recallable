@@ -37,12 +37,16 @@ pub const IS_SERDE_ENABLED: bool = cfg!(feature = "serde");
 
 const RECALLABLE: &str = "recallable";
 
+/// Field-level behavior inferred from `#[recallable]` attributes during analysis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FieldBehavior {
+    /// Keep the field in the memento with its original type.
     Keep,
+    /// Store the field as an inner memento and this field can recalled recursively.
     Recall,
 }
 
+/// The structural shape of the source struct and generated memento.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum StructShape {
     Named,
@@ -60,6 +64,7 @@ impl StructShape {
     }
 }
 
+/// How a field is represented in the generated memento.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FieldStrategy {
     /// Field excluded from memento entirely.
@@ -76,10 +81,14 @@ impl FieldStrategy {
     }
 }
 
+/// Whether a generic parameter is kept on the generated memento type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum GenericParamRetention {
+    /// Omit the parameter from the generated memento declaration.
     Dropped,
+    /// Retain the parameter because the memento shape depends on it.
     Retained,
+    /// Retain the type parameter and later add `Recallable`-related bounds for it.
     RetainedAsRecallable,
 }
 
@@ -413,9 +422,12 @@ fn collect_recall_like_bounds(
     bounds
 }
 
+/// How a field member is referenced in generated tokens.
 #[derive(Debug, Clone)]
 pub(crate) enum FieldMember<'a> {
+    /// Access by named field, such as `value`.
     Named(&'a Ident),
+    /// Access by tuple-field index, such as `.0`.
     Unnamed(Index),
 }
 
@@ -596,9 +608,16 @@ impl<'a> GenericParamLookup<'a> {
     }
 }
 
+/// Analysis-only classification for recalled field types.
+///
+/// This is used to decide whether a recalled field is exactly a generic type
+/// parameter, which affects generic retention and bound generation. It does not
+/// map directly to a distinct downstream `FieldStrategy`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RecallableFieldKind {
+    /// The field type is exactly a plain generic type parameter like `T`.
     BareTypeParam(usize),
+    /// The field type is any other supported path type.
     WholeType,
 }
 
