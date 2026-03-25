@@ -17,10 +17,10 @@ mod memento_struct;
 mod recall_impl;
 mod recallable_impl;
 
-pub(crate) use from_impl::gen_from_impl;
-pub(crate) use memento_struct::gen_memento_struct;
-pub(crate) use recall_impl::gen_recall_impl;
-pub(crate) use recallable_impl::gen_recallable_impl;
+pub(super) use from_impl::gen_from_impl;
+pub(super) use memento_struct::gen_memento_struct;
+pub(super) use recall_impl::gen_recall_impl;
+pub(super) use recallable_impl::gen_recallable_impl;
 
 use std::collections::{HashMap, HashSet};
 
@@ -33,8 +33,8 @@ use syn::{
     ImplGenerics, Index, Meta, PathArguments, Type, Visibility, WhereClause, WherePredicate,
 };
 
-pub(crate) const SERDE_ENABLED: bool = cfg!(feature = "serde");
-pub(crate) const IMPL_FROM_ENABLED: bool = cfg!(feature = "impl_from");
+pub(super) const SERDE_ENABLED: bool = cfg!(feature = "serde");
+pub(super) const IMPL_FROM_ENABLED: bool = cfg!(feature = "impl_from");
 
 const RECALLABLE: &str = "recallable";
 
@@ -49,7 +49,7 @@ enum FieldBehavior {
 
 /// The structural shape of the source struct and generated memento.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum StructShape {
+enum StructShape {
     Named,
     Unnamed,
     Unit,
@@ -67,7 +67,7 @@ impl StructShape {
 
 /// How a field is represented in the generated memento.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum FieldStrategy {
+enum FieldStrategy {
     /// Field excluded from memento entirely.
     Skip,
     /// Field copied as-is into memento (type unchanged).
@@ -77,14 +77,14 @@ pub(crate) enum FieldStrategy {
 }
 
 impl FieldStrategy {
-    pub(crate) const fn is_skip(&self) -> bool {
+    const fn is_skip(&self) -> bool {
         matches!(self, Self::Skip)
     }
 }
 
 /// Whether a generic parameter is kept on the generated memento type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum GenericParamRetention {
+enum GenericParamRetention {
     /// Omit the parameter from the generated memento declaration.
     Dropped,
     /// Retain the parameter because the memento shape depends on it.
@@ -94,9 +94,9 @@ pub(crate) enum GenericParamRetention {
 }
 
 #[derive(Debug)]
-pub(crate) struct GenericParamPlan<'a> {
-    pub(crate) param: &'a GenericParam,
-    pub(crate) retention: GenericParamRetention,
+struct GenericParamPlan<'a> {
+    param: &'a GenericParam,
+    retention: GenericParamRetention,
 }
 
 impl<'a> GenericParamPlan<'a> {
@@ -136,7 +136,7 @@ impl<'a> GenericParamPlan<'a> {
 }
 
 #[derive(Debug)]
-pub(crate) struct MementoTraitSpec {
+struct MementoTraitSpec {
     common_traits: Vec<TokenStream2>,
     serde_derive_trait: Option<TokenStream2>,
     serde_nested_bound_trait: Option<TokenStream2>,
@@ -156,11 +156,11 @@ impl MementoTraitSpec {
         }
     }
 
-    pub(crate) fn current() -> Self {
+    fn current() -> Self {
         Self::new(SERDE_ENABLED)
     }
 
-    pub(crate) fn derive_attr(&self) -> TokenStream2 {
+    fn derive_attr(&self) -> TokenStream2 {
         let mut derive_traits = self.common_traits.clone();
         if let Some(serde_derive_trait) = &self.serde_derive_trait {
             derive_traits.push(serde_derive_trait.clone());
@@ -168,26 +168,26 @@ impl MementoTraitSpec {
         quote! { #[derive(#(#derive_traits),*)] }
     }
 
-    pub(crate) fn common_bound_tokens(&self) -> TokenStream2 {
+    fn common_bound_tokens(&self) -> TokenStream2 {
         let common_traits = &self.common_traits;
         quote! { #(#common_traits)+* }
     }
 
-    pub(crate) fn serde_nested_bound(&self) -> Option<TokenStream2> {
+    fn serde_nested_bound(&self) -> Option<TokenStream2> {
         self.serde_nested_bound_trait.clone()
     }
 }
 
 #[derive(Debug)]
-pub(crate) struct CodegenEnv {
+pub(super) struct CodegenEnv {
     /// Fully qualified path to the `Recallable` trait.
-    pub(crate) recallable_trait: TokenStream2,
+    recallable_trait: TokenStream2,
     /// Fully qualified path to the `Recall` trait.
-    pub(crate) recall_trait: TokenStream2,
+    recall_trait: TokenStream2,
 }
 
 impl CodegenEnv {
-    pub(crate) fn resolve() -> Self {
+    pub(super) fn resolve() -> Self {
         let crate_path = crate_path();
         Self {
             recallable_trait: quote! { #crate_path::Recallable },
@@ -197,15 +197,15 @@ impl CodegenEnv {
 }
 
 #[derive(Debug)]
-pub(crate) struct FieldIr<'a> {
-    pub(crate) memento_index: Option<usize>,
-    pub(crate) member: FieldMember<'a>,
-    pub(crate) ty: &'a Type,
-    pub(crate) strategy: FieldStrategy,
+struct FieldIr<'a> {
+    memento_index: Option<usize>,
+    member: FieldMember<'a>,
+    ty: &'a Type,
+    strategy: FieldStrategy,
 }
 
 #[derive(Debug)]
-pub(crate) struct StructIr<'a> {
+pub(super) struct StructIr<'a> {
     name: &'a Ident,
     visibility: &'a Visibility,
     generics: &'a Generics,
@@ -219,7 +219,7 @@ pub(crate) struct StructIr<'a> {
 }
 
 impl<'a> StructIr<'a> {
-    pub(crate) fn analyze(input: &'a DeriveInput) -> syn::Result<Self> {
+    pub(super) fn analyze(input: &'a DeriveInput) -> syn::Result<Self> {
         let fields = extract_struct_fields(input)?;
         let struct_lifetimes = collect_struct_lifetimes(&input.generics);
         validate_no_borrowed_fields(fields, &struct_lifetimes)?;
@@ -252,30 +252,30 @@ impl<'a> StructIr<'a> {
         })
     }
 
-    pub(crate) fn struct_type(&self) -> TokenStream2 {
+    fn struct_type(&self) -> TokenStream2 {
         let name = &self.name;
         let (_, type_generics, _) = self.generics.split_for_impl();
         quote! { #name #type_generics }
     }
 
-    pub(crate) fn memento_name(&self) -> &Ident {
+    fn memento_name(&self) -> &Ident {
         &self.memento_name
     }
 
-    pub(crate) fn visibility(&self) -> &'a Visibility {
+    fn visibility(&self) -> &'a Visibility {
         self.visibility
     }
 
-    pub(crate) fn impl_generics(&self) -> ImplGenerics<'_> {
+    fn impl_generics(&self) -> ImplGenerics<'_> {
         let (impl_generics, _, _) = self.generics.split_for_impl();
         impl_generics
     }
 
-    pub(crate) fn generic_type_param_idents(&self) -> &HashSet<&'a Ident> {
+    fn generic_type_param_idents(&self) -> &HashSet<&'a Ident> {
         &self.generic_type_param_idents
     }
 
-    pub(crate) fn memento_decl_generics(&self) -> TokenStream2 {
+    fn memento_decl_generics(&self) -> TokenStream2 {
         let params = self
             .generic_params
             .iter()
@@ -290,11 +290,11 @@ impl<'a> StructIr<'a> {
         }
     }
 
-    pub(crate) fn memento_where_clause(&self) -> Option<&WhereClause> {
+    fn memento_where_clause(&self) -> Option<&WhereClause> {
         self.memento_where_clause.as_ref()
     }
 
-    pub(crate) fn generated_memento_shape(&self) -> StructShape {
+    fn generated_memento_shape(&self) -> StructShape {
         if self.shape == StructShape::Unit && self.has_synthetic_marker() {
             StructShape::Named
         } else {
@@ -302,11 +302,11 @@ impl<'a> StructIr<'a> {
         }
     }
 
-    pub(crate) fn has_synthetic_marker(&self) -> bool {
+    fn has_synthetic_marker(&self) -> bool {
         !self.marker_param_indices.is_empty()
     }
 
-    pub(crate) fn synthetic_marker_type(&self) -> Option<TokenStream2> {
+    fn synthetic_marker_type(&self) -> Option<TokenStream2> {
         if self.marker_param_indices.is_empty() {
             return None;
         }
@@ -321,13 +321,13 @@ impl<'a> StructIr<'a> {
         })
     }
 
-    pub(crate) fn recallable_params(&self) -> impl Iterator<Item = &Ident> {
+    fn recallable_params(&self) -> impl Iterator<Item = &Ident> {
         self.generic_params
             .iter()
             .filter_map(GenericParamPlan::recallable_ident)
     }
 
-    pub(crate) fn memento_type(&self) -> TokenStream2 {
+    fn memento_type(&self) -> TokenStream2 {
         let name = &self.memento_name;
         let args: Vec<_> = self
             .generic_params
@@ -343,17 +343,17 @@ impl<'a> StructIr<'a> {
         }
     }
 
-    pub(crate) fn memento_fields(&self) -> impl Iterator<Item = &FieldIr<'a>> {
+    fn memento_fields(&self) -> impl Iterator<Item = &FieldIr<'a>> {
         self.fields.iter().filter(|f| !f.strategy.is_skip())
     }
 
-    pub(crate) fn recallable_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
+    fn recallable_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
         self.recallable_params()
             .map(|ty| syn::parse_quote! { #ty: #bound })
             .collect()
     }
 
-    pub(crate) fn recallable_memento_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
+    fn recallable_memento_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
         self.recallable_params()
             .map(|ty| syn::parse_quote! { #ty::Memento: #bound })
             .collect()
@@ -376,14 +376,14 @@ impl<'a> StructIr<'a> {
             .collect()
     }
 
-    pub(crate) fn whole_type_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
+    fn whole_type_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
         self.whole_type_bound_targets()
             .into_iter()
             .map(|ty| syn::parse_quote! { #ty: #bound })
             .collect()
     }
 
-    pub(crate) fn whole_type_memento_bounds(
+    fn whole_type_memento_bounds(
         &self,
         recallable_trait: &TokenStream2,
         bound: &TokenStream2,
@@ -393,7 +393,7 @@ impl<'a> StructIr<'a> {
             .map(move |ty| syn::parse_quote! { <#ty as #recallable_trait>::Memento: #bound })
     }
 
-    pub(crate) fn whole_type_from_bounds(
+    fn whole_type_from_bounds(
         &self,
         recallable_trait: &TokenStream2,
     ) -> impl Iterator<Item = WherePredicate> {
@@ -407,7 +407,7 @@ impl<'a> StructIr<'a> {
             })
     }
 
-    pub(crate) fn extend_where_clause(&self, extra: &[WherePredicate]) -> Option<WhereClause> {
+    fn extend_where_clause(&self, extra: &[WherePredicate]) -> Option<WhereClause> {
         let mut where_clause = self.generics.where_clause.clone();
         if !extra.is_empty() {
             where_clause
@@ -476,7 +476,7 @@ fn collect_recall_like_bounds_with_spec(
 
 /// How a field member is referenced in generated tokens.
 #[derive(Debug, Clone)]
-pub(crate) enum FieldMember<'a> {
+enum FieldMember<'a> {
     /// Access by named field, such as `value`.
     Named(&'a Ident),
     /// Access by tuple-field index, such as `.0`.
@@ -875,7 +875,7 @@ fn plan_memento_generics<'a>(
     (generic_params, memento_where_clause)
 }
 
-pub fn has_recallable_skip_attr(field: &Field) -> bool {
+pub(super) fn has_recallable_skip_attr(field: &Field) -> bool {
     // Use determine_field_behavior for consistent validation.
     // In the attribute macro context, we intentionally ignore errors here
     // because the derive macros will report them with proper spans.

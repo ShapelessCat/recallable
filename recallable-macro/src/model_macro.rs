@@ -5,7 +5,7 @@ use syn::{Fields, ItemStruct, parse_macro_input, parse_quote};
 
 use crate::context::{SERDE_ENABLED, crate_path, has_recallable_skip_attr};
 
-pub(crate) fn expand(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub(super) fn expand(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let crate_path = crate_path();
     let mut input = parse_macro_input!(item as ItemStruct);
 

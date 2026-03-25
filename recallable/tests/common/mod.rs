@@ -2,145 +2,149 @@ use proptest::{array::uniform3, prelude::*};
 use recallable::{Recallable, recallable_model};
 use serde::{Deserialize, Serialize};
 
-pub const fn identity(x: &i32) -> i32 {
+pub(crate) const fn identity(x: &i32) -> i32 {
     *x
 }
 
 #[recallable_model]
 #[derive(Clone, Default, Debug, PartialEq)]
-pub struct FakeMeasurement<T, ClosureType> {
-    pub v: T,
+pub(crate) struct FakeMeasurement<T, ClosureType> {
+    pub(crate) v: T,
     #[recallable(skip)]
-    pub how: ClosureType,
+    pub(crate) how: ClosureType,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct MeasurementResult<T>(pub T);
+pub(crate) struct MeasurementResult<T>(pub(crate) T);
 
 #[recallable_model]
 #[derive(Clone, Debug)]
-pub struct ScopedMeasurement<ScopeType, MeasurementType, MeasurementOutput> {
-    pub current_control_level: ScopeType,
+pub(crate) struct ScopedMeasurement<ScopeType, MeasurementType, MeasurementOutput> {
+    pub(crate) current_control_level: ScopeType,
     #[recallable]
-    pub inner: MeasurementType,
-    pub current_base: MeasurementResult<MeasurementOutput>,
+    pub(crate) inner: MeasurementType,
+    pub(crate) current_base: MeasurementResult<MeasurementOutput>,
 }
 
-pub type ScopedMeasurementMemento =
+pub(crate) type ScopedMeasurementMemento =
     <ScopedMeasurement<u32, FakeMeasurement<i32, fn(&i32) -> i32>, i32> as Recallable>::Memento;
 
 #[recallable_model]
 #[derive(Clone, Default, Debug)]
-pub struct SimpleStruct {
-    pub val: i32,
+pub(crate) struct SimpleStruct {
+    pub(crate) val: i32,
 }
 
 #[recallable_model]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TupleStruct(pub i32, pub u32);
+pub(crate) struct TupleStruct(pub(crate) i32, pub(crate) u32);
 
 #[recallable_model]
 #[derive(Clone, Debug)]
-pub struct TupleStructWithSkippedMiddle<F>(pub i32, #[recallable(skip)] pub F, pub i64);
+pub(crate) struct TupleStructWithSkippedMiddle<F>(
+    pub(crate) i32,
+    #[recallable(skip)] pub(crate) F,
+    pub(crate) i64,
+);
 
-pub type TupleStructWithSkippedMiddleMemento =
+pub(crate) type TupleStructWithSkippedMiddleMemento =
     <TupleStructWithSkippedMiddle<fn(i32) -> i32> as Recallable>::Memento;
 
 #[recallable_model]
 #[derive(Clone, Debug)]
-pub struct TupleStructWithWhereClause<T>(pub i32, pub T, pub i64)
+pub(crate) struct TupleStructWithWhereClause<T>(pub(crate) i32, pub(crate) T, pub(crate) i64)
 where
     T: From<(u32, u32)>;
 
 #[recallable_model]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UnitStruct;
+pub(crate) struct UnitStruct;
 
 #[recallable_model]
 #[derive(Clone, Debug)]
-pub struct SkipSerializingStruct {
+pub(crate) struct SkipSerializingStruct {
     #[recallable(skip)]
-    pub skipped: i32,
-    pub value: i32,
+    pub(crate) skipped: i32,
+    pub(crate) value: i32,
 }
 
 #[derive(Clone, Debug, Serialize, recallable::Recallable, recallable::Recall)]
-pub struct DeriveOnlySkipBehavior {
+pub(crate) struct DeriveOnlySkipBehavior {
     #[recallable(skip)]
-    pub hidden: i32,
-    pub shown: i32,
+    pub(crate) hidden: i32,
+    pub(crate) shown: i32,
 }
 
 #[recallable_model]
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
-pub struct Counter {
-    pub value: i32,
+pub(crate) struct Counter {
+    pub(crate) value: i32,
 }
 
 #[recallable_model]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MixedGenericUsage<T, H> {
-    pub history: H,
+pub(crate) struct MixedGenericUsage<T, H> {
+    pub(crate) history: H,
     #[recallable]
-    pub current: T,
+    pub(crate) current: T,
 }
 
 #[recallable_model]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ExistingWhereTrailing<T, U>
+pub(crate) struct ExistingWhereTrailing<T, U>
 where
     U: Default,
 {
     #[recallable]
-    pub inner: T,
-    pub marker: U,
+    pub(crate) inner: T,
+    pub(crate) marker: U,
 }
 
 #[recallable_model]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ExistingWhereNoTrailing<T>
+pub(crate) struct ExistingWhereNoTrailing<T>
 where
     T: Clone,
 {
     #[recallable]
-    pub inner: T,
+    pub(crate) inner: T,
 }
 
 #[recallable_model]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PropertyInner {
-    pub enabled: bool,
-    pub lanes: [u8; 3],
+pub(crate) struct PropertyInner {
+    pub(crate) enabled: bool,
+    pub(crate) lanes: [u8; 3],
 }
 
-pub type PropertyInnerMemento = <PropertyInner as Recallable>::Memento;
+pub(crate) type PropertyInnerMemento = <PropertyInner as Recallable>::Memento;
 
 // Property tests use a small nested model with one skipped field so they can
 // simultaneously exercise nested mementos, scalar fields, and skip semantics
 // across both backends without requiring alloc-backed collections.
 #[recallable_model]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PropertyOuter {
-    pub level: i16,
-    pub threshold: u32,
+pub(crate) struct PropertyOuter {
+    pub(crate) level: i16,
+    pub(crate) threshold: u32,
     #[recallable]
-    pub nested: PropertyInner,
+    pub(crate) nested: PropertyInner,
     #[recallable(skip)]
-    pub skipped_marker: u8,
+    pub(crate) skipped_marker: u8,
 }
 
-pub type PropertyOuterMemento = <PropertyOuter as Recallable>::Memento;
+pub(crate) type PropertyOuterMemento = <PropertyOuter as Recallable>::Memento;
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
-pub struct InspectablePropertyOuterMemento {
-    pub level: i16,
-    pub threshold: u32,
-    pub nested: PropertyInnerMemento,
+pub(crate) struct InspectablePropertyOuterMemento {
+    pub(crate) level: i16,
+    pub(crate) threshold: u32,
+    pub(crate) nested: PropertyInnerMemento,
 }
 
 // Generate broad but backend-friendly inputs so property tests cover more than
 // a single happy-path example while still matching the project's feature set.
-pub fn property_outer_strategy() -> impl Strategy<Value = PropertyOuter> {
+pub(crate) fn property_outer_strategy() -> impl Strategy<Value = PropertyOuter> {
     (
         any::<i16>(),
         any::<u32>(),
@@ -160,7 +164,7 @@ pub fn property_outer_strategy() -> impl Strategy<Value = PropertyOuter> {
 
 // Build a known target state whose skipped field is caller-controlled. The
 // property tests use this to prove recall updates persisted fields only.
-pub fn property_seed(skipped_marker: u8) -> PropertyOuter {
+pub(crate) fn property_seed(skipped_marker: u8) -> PropertyOuter {
     PropertyOuter {
         level: 0,
         threshold: 0,
@@ -175,27 +179,27 @@ pub fn property_seed(skipped_marker: u8) -> PropertyOuter {
 // Concrete schema versions keep compatibility assertions explicit: added,
 // removed, and renamed fields each represent a different kind of drift.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SchemaDriftV1 {
-    pub id: u8,
-    pub active: bool,
+pub(crate) struct SchemaDriftV1 {
+    pub(crate) id: u8,
+    pub(crate) active: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SchemaDriftAddedFieldV2 {
-    pub id: u8,
-    pub revision: u8,
-    pub active: bool,
-}
-
-#[allow(dead_code)]
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SchemaDriftRemovedFieldV2 {
-    pub id: u8,
+pub(crate) struct SchemaDriftAddedFieldV2 {
+    pub(crate) id: u8,
+    pub(crate) revision: u8,
+    pub(crate) active: bool,
 }
 
 #[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SchemaDriftRenamedFieldV2 {
-    pub id: u8,
-    pub is_active: bool,
+pub(crate) struct SchemaDriftRemovedFieldV2 {
+    pub(crate) id: u8,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct SchemaDriftRenamedFieldV2 {
+    pub(crate) id: u8,
+    pub(crate) is_active: bool,
 }
