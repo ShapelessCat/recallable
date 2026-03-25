@@ -165,7 +165,6 @@ pub use recallable_macro::Recall;
 /// }
 ///
 /// impl<T> Recall for Accumulator<T> {
-///     #[inline(always)]
 ///     fn recall(&mut self, memento: Self::Memento) {
 ///         self.prev_control_signal = memento.prev_control_signal;
 ///         self.accumulated = memento.accumulated;
