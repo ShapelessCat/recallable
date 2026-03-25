@@ -2,7 +2,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::WherePredicate;
 
-use crate::context::{CodegenEnv, StructIr};
+use crate::context::{CodegenEnv, StructIr, collect_recall_like_bounds};
 
 pub(crate) fn gen_recallable_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
     let impl_generics = ir.impl_generics();
@@ -26,16 +26,5 @@ fn build_recallable_where_clause(ir: &StructIr, env: &CodegenEnv) -> Option<syn:
 }
 
 fn collect_recallable_bounds(ir: &StructIr, env: &CodegenEnv) -> Vec<WherePredicate> {
-    let recallable_trait = &env.recallable_trait;
-    let memento_trait_bounds = env.memento_trait_bounds();
-
-    let mut bounds = ir.recallable_bounds(recallable_trait);
-    bounds.extend(ir.recallable_memento_bounds(&memento_trait_bounds));
-    bounds.extend(ir.whole_type_bounds(recallable_trait));
-    bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &memento_trait_bounds));
-    if let Some(deserialize_owned) = env.deserialize_owned_bound() {
-        bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &deserialize_owned));
-    }
-
-    bounds
+    collect_recall_like_bounds(ir, env, &env.recallable_trait)
 }

@@ -387,6 +387,43 @@ impl<'a> StructIr<'a> {
     }
 }
 
+fn collect_shared_memento_bounds(ir: &StructIr, env: &CodegenEnv) -> Vec<WherePredicate> {
+    let recallable_trait = &env.recallable_trait;
+    let memento_trait_bounds = env.memento_trait_bounds();
+
+    let mut bounds = ir.recallable_memento_bounds(&memento_trait_bounds);
+    bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &memento_trait_bounds));
+    if let Some(deserialize_owned) = env.deserialize_owned_bound() {
+        bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &deserialize_owned));
+    }
+
+    bounds
+}
+
+fn collect_recall_like_bounds(
+    ir: &StructIr,
+    env: &CodegenEnv,
+    direct_bound: &TokenStream2,
+) -> Vec<WherePredicate> {
+    let shared_memento_bounds = collect_shared_memento_bounds(ir, env);
+    let shared_param_bound_count = ir.recallable_params().count();
+
+    let mut bounds = ir.recallable_bounds(direct_bound);
+    bounds.extend(
+        shared_memento_bounds
+            .iter()
+            .take(shared_param_bound_count)
+            .cloned(),
+    );
+    bounds.extend(ir.whole_type_bounds(direct_bound));
+    bounds.extend(
+        shared_memento_bounds
+            .into_iter()
+            .skip(shared_param_bound_count),
+    );
+    bounds
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum FieldMember<'a> {
     Named(&'a Ident),
@@ -967,7 +1004,10 @@ mod tests {
     use quote::{ToTokens, quote};
     use syn::parse_quote;
 
-    use super::{StructIr, classify_recallable_field_type};
+    use super::{
+        CodegenEnv, StructIr, classify_recallable_field_type, collect_recall_like_bounds,
+        collect_shared_memento_bounds,
+    };
 
     #[test]
     fn memento_generics_preserve_retained_bounds_defaults_and_where_clauses() {
@@ -1062,5 +1102,67 @@ mod tests {
             classify_recallable_field_type(&field.ty, &lookup),
             Ok(super::RecallableFieldKind::WholeType)
         ));
+    }
+
+    #[test]
+    fn shared_bound_helpers_preserve_predicate_order() {
+        let input: syn::DeriveInput = parse_quote! {
+            struct Example<T, U, V> {
+                #[recallable]
+                current: T,
+                #[recallable]
+                history: Option<U>,
+                extra: V,
+            }
+        };
+        let ir = StructIr::analyze(&input).unwrap();
+        let env = CodegenEnv {
+            recallable_trait: quote!(::recallable::Recallable),
+            recall_trait: quote!(::recallable::Recall),
+            serde_enabled: true,
+            impl_from_enabled: true,
+        };
+
+        let shared_bounds: Vec<_> = collect_shared_memento_bounds(&ir, &env)
+            .into_iter()
+            .map(|predicate| predicate.to_token_stream().to_string())
+            .collect();
+        assert_eq!(
+            shared_bounds,
+            vec![
+                quote!(T::Memento: ::core::clone::Clone
+                    + ::core::fmt::Debug
+                    + ::core::cmp::PartialEq)
+                .to_string(),
+                quote!(<Option<U> as ::recallable::Recallable>::Memento: ::core::clone::Clone
+                    + ::core::fmt::Debug
+                    + ::core::cmp::PartialEq)
+                .to_string(),
+                quote!(<Option<U> as ::recallable::Recallable>::Memento: ::serde::de::DeserializeOwned)
+                    .to_string(),
+            ]
+        );
+
+        let recall_like_bounds: Vec<_> = collect_recall_like_bounds(&ir, &env, &env.recall_trait)
+            .into_iter()
+            .map(|predicate| predicate.to_token_stream().to_string())
+            .collect();
+        assert_eq!(
+            recall_like_bounds,
+            vec![
+                quote!(T: ::recallable::Recall).to_string(),
+                quote!(T::Memento: ::core::clone::Clone
+                    + ::core::fmt::Debug
+                    + ::core::cmp::PartialEq)
+                .to_string(),
+                quote!(Option<U>: ::recallable::Recall).to_string(),
+                quote!(<Option<U> as ::recallable::Recallable>::Memento: ::core::clone::Clone
+                    + ::core::fmt::Debug
+                    + ::core::cmp::PartialEq)
+                .to_string(),
+                quote!(<Option<U> as ::recallable::Recallable>::Memento: ::serde::de::DeserializeOwned)
+                    .to_string(),
+            ]
+        );
     }
 }

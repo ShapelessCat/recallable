@@ -4,7 +4,8 @@ use std::collections::HashSet;
 use syn::{Ident, WhereClause, WherePredicate};
 
 use crate::context::{
-    CodegenEnv, FieldIr, FieldMember, FieldStrategy, StructIr, StructShape, is_generic_type_param,
+    CodegenEnv, FieldIr, FieldMember, FieldStrategy, StructIr, StructShape,
+    collect_recall_like_bounds, is_generic_type_param,
 };
 
 pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
@@ -55,18 +56,7 @@ fn build_memento_where_clause(ir: &StructIr, env: &CodegenEnv) -> Option<WhereCl
 }
 
 fn collect_memento_bounds(ir: &StructIr, env: &CodegenEnv) -> Vec<WherePredicate> {
-    let recallable_trait = &env.recallable_trait;
-    let memento_trait_bounds = env.memento_trait_bounds();
-
-    let mut bounds = ir.recallable_bounds(recallable_trait);
-    bounds.extend(ir.recallable_memento_bounds(&memento_trait_bounds));
-    bounds.extend(ir.whole_type_bounds(recallable_trait));
-    bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &memento_trait_bounds));
-    if let Some(deserialize_owned) = env.deserialize_owned_bound() {
-        bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &deserialize_owned));
-    }
-
-    bounds
+    collect_recall_like_bounds(ir, env, &env.recallable_trait)
 }
 
 fn collect_memento_fields(
