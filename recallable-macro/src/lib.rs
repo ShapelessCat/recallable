@@ -13,7 +13,7 @@
 //!   `impl_from` Cargo feature it also generates `From<Struct>` for the memento type.
 //!
 //! - `#[derive(Recall)]`: generates the `Recall` implementation and recursively
-//!   recalles fields annotated with `#[recallable]`.
+//!   recalls fields annotated with `#[recallable]`.
 //!
 //! Feature flags are evaluated in the `recallable-macro` crate itself. See `context`
 //! for details about the generated memento struct and trait implementations.
@@ -54,6 +54,10 @@ pub fn recallable_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - also derives `serde::Deserialize` when the `serde` feature is enabled for the
 ///   macro crate.
 ///
+/// For `#[recallable]` fields, the generated memento field type is exactly
+/// `<FieldType as Recallable>::Memento`. The macro does not prescribe one canonical container
+/// semantics; it uses whatever memento shape the field type defines.
+///
 /// The companion struct itself is generated as an internal implementation detail. The supported
 /// way to name it is `<Struct as Recallable>::Memento`.
 ///
@@ -65,7 +69,8 @@ pub fn recallable_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// All non-skipped field types must implement these traits.
 ///
 /// When the `impl_from` feature is enabled for the macro crate, a
-/// `From<Struct>` implementation is also generated for the memento type.
+/// `From<Struct>` implementation is also generated for the memento type. For `#[recallable]`
+/// fields, that additionally requires `<FieldType as Recallable>::Memento: From<FieldType>`.
 pub fn derive_recallable(input: TokenStream) -> TokenStream {
     let input: DeriveInput = parse_macro_input!(input as DeriveInput);
     let ir = match context::StructIr::analyze(&input) {
@@ -107,6 +112,9 @@ pub fn derive_recallable(input: TokenStream) -> TokenStream {
 /// - assigns fields directly by default,
 /// - recursively calls `recall` on fields marked with `#[recallable]`,
 /// - respects `#[recallable(skip)]` by omitting those fields from recalling.
+///
+/// For `#[recallable]` fields, replace/merge behavior comes from the field type's own
+/// `Recall` implementation.
 pub fn derive_recall(input: TokenStream) -> TokenStream {
     let input: DeriveInput = parse_macro_input!(input as DeriveInput);
     let ir = match context::StructIr::analyze(&input) {
