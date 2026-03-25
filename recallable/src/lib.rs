@@ -408,6 +408,20 @@ mod tests {
     }
 
     #[test]
+    fn option_smoke_impl_replaces_value() {
+        let mut value = Some(1u32);
+        <Option<u32> as Recall>::recall(&mut value, None);
+        assert_eq!(value, None);
+    }
+
+    #[test]
+    fn hash_map_smoke_impl_replaces_value() {
+        let mut value = HashMap::from([(1u8, 10u32)]);
+        <HashMap<u8, u32> as Recall>::recall(&mut value, HashMap::from([(2u8, 20u32)]));
+        assert_eq!(value, HashMap::from([(2u8, 20u32)]));
+    }
+
+    #[test]
     fn derive_accepts_raw_option_paths() {
         let _: fn(&mut OptionOuter, <OptionOuter as Recallable>::Memento) =
             <OptionOuter as Recall>::recall;
