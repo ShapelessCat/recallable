@@ -27,7 +27,7 @@ fn build_from_method(ir: &StructIr) -> TokenStream2 {
     let fn_body = build_from_body(ir);
 
     quote! {
-        #[inline(always)]
+        #[inline]
         fn from(value: #struct_type) -> Self {
             #fn_body
         }

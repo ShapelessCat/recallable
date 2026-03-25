@@ -39,7 +39,7 @@ fn build_recall_method(ir: &StructIr, recall_trait: &TokenStream2) -> TokenStrea
         .map(|field| build_recall_statement(field, recall_trait));
 
     quote! {
-        #[inline(always)]
+        #[inline]
         fn recall(&mut self, #recall_param_name: Self::Memento) {
             #(#statements)*
         }
