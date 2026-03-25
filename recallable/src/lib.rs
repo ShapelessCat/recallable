@@ -28,6 +28,10 @@ extern crate self as recallable;
 /// also derives `serde::Serialize` on the struct and injects `#[serde(skip)]` on fields
 /// marked with `#[recallable(skip)]`.
 ///
+/// Lifetime parameters are supported only when the generated memento can stay owned:
+/// non-skipped fields may not borrow one of the struct's lifetimes. Skipped borrowed
+/// fields and lifetime-only markers such as `PhantomData<&'a T>` are allowed.
+///
 /// This example requires the `serde` feature.
 ///
 /// ```rust
@@ -72,6 +76,10 @@ pub use recallable_macro::recallable_model;
 /// `From<Struct>` for the memento type, which requires
 /// `<FieldType as Recallable>::Memento: From<FieldType>` for each `#[recallable]` field.
 ///
+/// Lifetime parameters are supported only when the generated memento can stay owned:
+/// non-skipped fields may not borrow one of the struct's lifetimes. Skipped borrowed
+/// fields and lifetime-only markers such as `PhantomData<&'a T>` are allowed.
+///
 /// This example requires the `serde` feature.
 ///
 /// ```rust
@@ -110,6 +118,10 @@ pub use recallable_macro::Recallable;
 /// Fields marked `#[recallable(skip)]` are left untouched.
 /// For `#[recallable]` fields, replace/merge behavior comes from the field type's own
 /// [`Recall`] implementation.
+///
+/// Lifetime parameters are supported only when the generated memento can stay owned:
+/// non-skipped fields may not borrow one of the struct's lifetimes. Skipped borrowed
+/// fields and lifetime-only markers such as `PhantomData<&'a T>` are allowed.
 ///
 /// This example requires the `serde` feature.
 ///
