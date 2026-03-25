@@ -26,7 +26,6 @@ use syn::{DeriveInput, parse_macro_input};
 mod context;
 mod model_macro;
 
-#[proc_macro_attribute]
 /// Attribute macro that augments a struct with `Recallable`/`Recall` derives.
 ///
 /// - Always adds `#[derive(Recallable, Recall)]`.
@@ -41,11 +40,11 @@ mod model_macro;
 /// to inspect. An attribute macro only receives attributes that follow it in source
 /// order. For example, `#[derive(Serialize)]` placed above `#[recallable_model]` is
 /// invisible to the macro and will cause a duplicate-derive error.
+#[proc_macro_attribute]
 pub fn recallable_model(attr: TokenStream, item: TokenStream) -> TokenStream {
     model_macro::expand(attr, item)
 }
 
-#[proc_macro_derive(Recallable, attributes(recallable))]
 /// Derive macro that generates the companion memento type and `Recallable` impl.
 ///
 /// The generated memento type:
@@ -71,6 +70,7 @@ pub fn recallable_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// When the `impl_from` feature is enabled for the macro crate, a
 /// `From<Struct>` implementation is also generated for the memento type. For `#[recallable]`
 /// fields, that additionally requires `<FieldType as Recallable>::Memento: From<FieldType>`.
+#[proc_macro_derive(Recallable, attributes(recallable))]
 pub fn derive_recallable(input: TokenStream) -> TokenStream {
     let input: DeriveInput = parse_macro_input!(input as DeriveInput);
     let ir = match context::StructIr::analyze(&input) {
