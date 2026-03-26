@@ -96,7 +96,7 @@ fn build_from_expr(field: &FieldIr) -> TokenStream2 {
 
 fn build_from_where_clause(ir: &StructIr, env: &CodegenEnv) -> Option<syn::WhereClause> {
     let bounds = collect_from_bounds(ir, env);
-    ir.extend_where_clause(&bounds)
+    ir.extend_where_clause(bounds)
 }
 
 fn collect_from_bounds(ir: &StructIr, env: &CodegenEnv) -> Vec<WherePredicate> {
