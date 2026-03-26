@@ -101,22 +101,16 @@ fn build_from_where_clause(ir: &StructIr, env: &CodegenEnv) -> Option<syn::Where
 
 fn collect_from_bounds(ir: &StructIr, env: &CodegenEnv) -> Vec<WherePredicate> {
     let recallable_trait = &env.recallable_trait;
-    let mut bounds = collect_recallable_from_bounds(ir, recallable_trait);
-    bounds.extend(collect_shared_memento_bounds(ir, env));
-    bounds.extend(ir.whole_type_from_bounds(recallable_trait));
-    bounds
-}
-
-fn collect_recallable_from_bounds(
-    ir: &StructIr,
-    recallable_trait: &TokenStream2,
-) -> Vec<WherePredicate> {
-    ir.recallable_params()
+    let mut bounds: Vec<_> = ir
+        .recallable_params()
         .flat_map(|ty| -> [WherePredicate; 2] {
             [
                 syn::parse_quote! { #ty: #recallable_trait },
                 syn::parse_quote! { #ty::Memento: ::core::convert::From<#ty> },
             ]
         })
-        .collect()
+        .collect();
+    bounds.extend(collect_shared_memento_bounds(ir, env));
+    bounds.extend(ir.whole_type_from_bounds(recallable_trait));
+    bounds
 }
