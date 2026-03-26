@@ -13,7 +13,7 @@ use super::generics::{
     plan_memento_generics,
 };
 use super::lifetime::{collect_struct_lifetimes, validate_no_borrowed_fields};
-use super::util::crate_path;
+use super::util::{crate_path, is_recallable_attr};
 
 /// The structural shape of the source struct and generated memento.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,6 +106,24 @@ pub(crate) struct StructIr<'a> {
     generic_params: Vec<GenericParamPlan<'a>>,
     memento_where_clause: Option<WhereClause>,
     marker_param_indices: Vec<usize>,
+    memento_derive_off: bool,
+}
+
+fn has_memento_derive_off(input: &DeriveInput) -> syn::Result<bool> {
+    let mut found = false;
+    for attr in input.attrs.iter().filter(|a| is_recallable_attr(a)) {
+        attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident("memento_derive_off") {
+                found = true;
+                Ok(())
+            } else if meta.path.is_ident("skip") {
+                Ok(())
+            } else {
+                Err(meta.error("unrecognized `recallable` parameter"))
+            }
+        })?;
+    }
+    Ok(found)
 }
 
 impl<'a> StructIr<'a> {
@@ -127,6 +145,7 @@ impl<'a> StructIr<'a> {
             plan_memento_generics(&input.generics, usage, &generic_lookup);
         let marker_param_indices =
             collect_marker_param_indices(&field_irs, &generic_params, &generic_lookup);
+        let memento_derive_off = has_memento_derive_off(input)?;
 
         Ok(Self {
             name: &input.ident,
@@ -139,6 +158,7 @@ impl<'a> StructIr<'a> {
             generic_params,
             memento_where_clause,
             marker_param_indices,
+            memento_derive_off,
         })
     }
 
@@ -154,6 +174,10 @@ impl<'a> StructIr<'a> {
 
     pub(crate) fn visibility(&self) -> &'a Visibility {
         self.visibility
+    }
+
+    pub(crate) fn memento_derive_off(&self) -> bool {
+        self.memento_derive_off
     }
 
     pub(crate) fn impl_generics(&self) -> ImplGenerics<'_> {
@@ -306,5 +330,35 @@ impl<'a> StructIr<'a> {
                 .extend(extra.iter().cloned());
         }
         where_clause
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use syn::parse_quote;
+
+    use super::StructIr;
+
+    #[test]
+    fn analyze_detects_memento_derive_off() {
+        let input: syn::DeriveInput = parse_quote! {
+            #[recallable(memento_derive_off)]
+            struct Example {
+                value: u32,
+            }
+        };
+        let ir = StructIr::analyze(&input).unwrap();
+        assert!(ir.memento_derive_off());
+    }
+
+    #[test]
+    fn analyze_defaults_memento_derive_off_to_false() {
+        let input: syn::DeriveInput = parse_quote! {
+            struct Example {
+                value: u32,
+            }
+        };
+        let ir = StructIr::analyze(&input).unwrap();
+        assert!(!ir.memento_derive_off());
     }
 }
