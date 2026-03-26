@@ -16,7 +16,7 @@ mod recallable_impl;
 
 pub(super) use from_impl::gen_from_impl;
 pub(super) use internal::{
-    CodegenEnv, FieldIr, FieldMember, FieldStrategy, MementoTraitSpec, StructIr, StructShape,
+    CodegenEnv, FieldIr, FieldMember, FieldStrategy, StructIr, StructShape,
     collect_recall_like_bounds, collect_shared_memento_bounds, crate_path,
     has_recallable_skip_attr, is_generic_type_param,
 };
