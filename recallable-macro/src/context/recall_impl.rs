@@ -25,7 +25,7 @@ pub(crate) fn gen_recall_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
 
 fn build_recall_where_clause(ir: &StructIr, env: &CodegenEnv) -> Option<syn::WhereClause> {
     let extra_bounds = collect_recall_bounds(ir, env);
-    ir.extend_where_clause(&extra_bounds)
+    ir.extend_where_clause(extra_bounds)
 }
 
 fn collect_recall_bounds(ir: &StructIr, env: &CodegenEnv) -> Vec<WherePredicate> {

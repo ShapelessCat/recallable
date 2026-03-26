@@ -23,7 +23,7 @@ pub(crate) fn gen_recallable_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStrea
 
 fn build_recallable_where_clause(ir: &StructIr, env: &CodegenEnv) -> Option<syn::WhereClause> {
     let extra_bounds = collect_recallable_bounds(ir, env);
-    ir.extend_where_clause(&extra_bounds)
+    ir.extend_where_clause(extra_bounds)
 }
 
 fn collect_recallable_bounds(ir: &StructIr, env: &CodegenEnv) -> Vec<WherePredicate> {

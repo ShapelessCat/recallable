@@ -334,14 +334,21 @@ impl<'a> StructIr<'a> {
             })
     }
 
-    pub(crate) fn extend_where_clause(&self, extra: &[WherePredicate]) -> Option<WhereClause> {
+    pub(crate) fn extend_where_clause(
+        &self,
+        extra: impl IntoIterator<Item = WherePredicate>,
+    ) -> Option<WhereClause> {
         let mut where_clause = self.generics.where_clause.clone();
-        if !extra.is_empty() {
+        let mut extra_iter = extra.into_iter().peekable();
+        if extra_iter.peek().is_none() {
             where_clause
-                .get_or_insert_with(|| syn::parse_quote! { where })
+        } else {
+            where_clause
+                .get_or_insert(syn::parse_quote! { where })
                 .predicates
-                .extend(extra.iter().cloned());
+                .extend(extra_iter);
+
+            where_clause
         }
-        where_clause
     }
 }

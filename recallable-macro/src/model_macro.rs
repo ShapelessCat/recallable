@@ -8,7 +8,8 @@ use crate::context::{SERDE_ENABLED, crate_path, has_recallable_skip_attr};
 
 #[must_use]
 pub(super) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
-    if let Err(err) = validate_model_attr(attr.into()) {
+    let attr_tokens: TokenStream2 = attr.into();
+    if let Err(err) = validate_model_attr(&attr_tokens) {
         return err.to_compile_error().into();
     }
 
@@ -30,12 +31,15 @@ pub(super) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     (quote! { #input }).into()
 }
 
-fn validate_model_attr(attr: TokenStream2) -> syn::Result<()> {
-    syn::parse2::<syn::parse::Nothing>(attr.clone())
-        .map(|_| ())
-        .map_err(|_| {
-            syn::Error::new_spanned(attr, "`#[recallable_model]` does not accept arguments")
-        })
+fn validate_model_attr(attr: &TokenStream2) -> syn::Result<()> {
+    if attr.is_empty() {
+        Ok(())
+    } else {
+        Err(syn::Error::new_spanned(
+            attr,
+            "`#[recallable_model]` does not accept arguments",
+        ))
+    }
 }
 
 #[must_use]
@@ -129,7 +133,7 @@ mod tests {
 
     #[test]
     fn recallable_model_rejects_arguments() {
-        let error = validate_model_attr(quote!(unexpected)).unwrap_err();
+        let error = validate_model_attr(&quote!(unexpected)).unwrap_err();
 
         assert!(
             error

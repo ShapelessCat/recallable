@@ -56,7 +56,7 @@ impl MementoTraitSpec {
 
     fn serde_nested_bound(&self) -> Option<TokenStream2> {
         self.serde_enabled
-            .then(|| quote!(::serde::de::DeserializeOwned))
+            .then_some(quote!(::serde::de::DeserializeOwned))
     }
 
     const fn has_common_traits(&self) -> bool {
