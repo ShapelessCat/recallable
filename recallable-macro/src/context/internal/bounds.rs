@@ -6,48 +6,59 @@ use super::ir::{CodegenEnv, StructIr};
 
 #[derive(Debug)]
 pub(crate) struct MementoTraitSpec {
-    common_traits: Vec<TokenStream2>,
-    serde_derive_trait: Option<TokenStream2>,
-    serde_nested_bound_trait: Option<TokenStream2>,
+    serde_enabled: bool,
+    derive_off: bool,
 }
 
 impl MementoTraitSpec {
-    pub(super) fn new(serde_enabled: bool, derive_off: bool) -> Self {
+    pub(super) const fn new(serde_enabled: bool, derive_off: bool) -> Self {
         Self {
-            common_traits: if derive_off {
-                vec![]
-            } else {
-                vec![
-                    quote!(::core::clone::Clone),
-                    quote!(::core::fmt::Debug),
-                    quote!(::core::cmp::PartialEq),
-                ]
-            },
-            serde_derive_trait: serde_enabled.then_some(quote!(::serde::Deserialize)),
-            serde_nested_bound_trait: serde_enabled
-                .then_some(quote!(::serde::de::DeserializeOwned)),
+            serde_enabled,
+            derive_off,
         }
     }
 
     pub(crate) fn derive_attr(&self) -> TokenStream2 {
-        let mut derive_traits = self.common_traits.clone();
-        if let Some(serde_derive_trait) = &self.serde_derive_trait {
-            derive_traits.push(serde_derive_trait.clone());
-        }
-        if derive_traits.is_empty() {
-            quote! {}
-        } else {
-            quote! { #[derive(#(#derive_traits),*)] }
+        match (self.has_common_traits(), self.serde_enabled) {
+            (true, true) => {
+                quote! {
+                    #[derive(
+                        ::core::clone::Clone,
+                        ::core::fmt::Debug,
+                        ::core::cmp::PartialEq,
+                        ::serde::Deserialize
+                    )]
+                }
+            }
+            (true, false) => {
+                quote! {
+                    #[derive(
+                        ::core::clone::Clone,
+                        ::core::fmt::Debug,
+                        ::core::cmp::PartialEq
+                    )]
+                }
+            }
+            (false, true) => quote! { #[derive(::serde::Deserialize)] },
+            (false, false) => quote! {},
         }
     }
 
     fn common_bound_tokens(&self) -> TokenStream2 {
-        let common_traits = &self.common_traits;
-        quote! { #(#common_traits)+* }
+        if self.has_common_traits() {
+            quote! { ::core::clone::Clone + ::core::fmt::Debug + ::core::cmp::PartialEq }
+        } else {
+            quote! {}
+        }
     }
 
-    fn serde_nested_bound(&self) -> Option<&TokenStream2> {
-        self.serde_nested_bound_trait.as_ref()
+    fn serde_nested_bound(&self) -> Option<TokenStream2> {
+        self.serde_enabled
+            .then(|| quote!(::serde::de::DeserializeOwned))
+    }
+
+    const fn has_common_traits(&self) -> bool {
+        !self.derive_off
     }
 }
 
@@ -69,7 +80,7 @@ fn collect_shared_memento_bounds_with_spec(
     let mut bounds = ir.recallable_memento_bounds(&memento_trait_bounds);
     bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &memento_trait_bounds));
     if let Some(deserialize_owned) = memento_trait_spec.serde_nested_bound() {
-        bounds.extend(ir.whole_type_memento_bounds(recallable_trait, deserialize_owned));
+        bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &deserialize_owned));
     }
 
     bounds

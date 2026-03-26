@@ -43,11 +43,10 @@ fn build_from_body(ir: &StructIr) -> TokenStream2 {
 }
 
 fn build_named_from_body(ir: &StructIr) -> TokenStream2 {
-    let mut inits: Vec<_> = ir.memento_fields().map(build_named_from_field).collect();
-
-    if ir.has_synthetic_marker() {
-        inits.push(quote! { _recallable_marker: ::core::marker::PhantomData });
-    }
+    let inits = ir
+        .memento_fields()
+        .map(build_named_from_field)
+        .chain(ir.has_synthetic_marker().then(build_named_marker_init));
 
     quote! { Self { #(#inits),* } }
 }
@@ -59,11 +58,10 @@ fn build_named_from_field(field: &FieldIr) -> TokenStream2 {
 }
 
 fn build_unnamed_from_body(ir: &StructIr) -> TokenStream2 {
-    let mut values: Vec<_> = ir.memento_fields().map(build_from_expr).collect();
-
-    if ir.has_synthetic_marker() {
-        values.push(build_marker_init());
-    }
+    let values = ir
+        .memento_fields()
+        .map(build_from_expr)
+        .chain(ir.has_synthetic_marker().then(build_marker_init));
 
     quote! { Self(#(#values),*) }
 }
@@ -78,6 +76,10 @@ fn build_unit_from_body(ir: &StructIr) -> TokenStream2 {
 
 fn build_marker_init() -> TokenStream2 {
     quote! { ::core::marker::PhantomData }
+}
+
+fn build_named_marker_init() -> TokenStream2 {
+    quote! { _recallable_marker: ::core::marker::PhantomData }
 }
 
 fn build_from_expr(field: &FieldIr) -> TokenStream2 {
