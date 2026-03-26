@@ -26,11 +26,11 @@ pub(super) struct GenericParamPlan<'a> {
 
 impl<'a> GenericParamPlan<'a> {
     #[must_use]
-    pub(super) fn is_retained(&self) -> bool {
+    pub(super) const fn is_retained(&self) -> bool {
         !matches!(self.retention, GenericParamRetention::Dropped)
     }
 
-    pub(super) fn decl_param(&self) -> &GenericParam {
+    pub(super) const fn decl_param(&self) -> &GenericParam {
         self.param
     }
 
@@ -53,7 +53,7 @@ impl<'a> GenericParamPlan<'a> {
     }
 
     #[must_use]
-    pub(super) fn recallable_ident(&self) -> Option<&'a Ident> {
+    pub(super) const fn recallable_ident(&self) -> Option<&'a Ident> {
         match (self.param, self.retention) {
             (GenericParam::Type(param), GenericParamRetention::RetainedAsRecallable) => {
                 Some(&param.ident)
