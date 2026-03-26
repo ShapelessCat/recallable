@@ -56,6 +56,7 @@ This crate makes deliberate choices to encourage correct usage of the Memento pa
   - [Nested Recallable Structs](#nested-recallable-structs)
   - [Fallible Recalling](#fallible-recalling)
 - [How It Works](#how-it-works)
+  - [Generated Code](#generated-code)
 - [API Reference](#api-reference)
 - [Contributing](#contributing)
 - [License](#license)
@@ -361,6 +362,57 @@ When you derive `Recall` on a struct:
 
 2. **Trait Implementation**: The macro generates `Recall` implementation for the target struct (see
 API reference for the exact trait definitions).
+
+### Generated Code
+
+To see exactly what the macros produce, run `cargo expand` on an example. Here is a
+simplified view of the output for a basic struct (serde `Deserialize` expansion omitted
+for clarity):
+
+```rust
+// Source:
+//
+// #[recallable_model]
+// #[derive(Clone, Debug, PartialEq)]
+// struct DashboardState {
+//     volume: u8,
+//     label: String,
+//     #[recallable(skip)]
+//     cache_key: String,
+// }
+
+// What #[recallable_model] injects:
+// - #[derive(Recallable, Recall)] on the struct
+// - #[derive(serde::Serialize)] on the struct (with serde feature)
+// - #[serde(skip)] on #[recallable(skip)] fields
+
+// Generated inside a `const _: () = { ... }` block:
+
+#[automatically_derived]
+struct DashboardStateMemento {
+    volume: u8,
+    label: String,
+}
+// Also derives: Clone, Debug, PartialEq, Deserialize (with serde feature)
+
+#[automatically_derived]
+impl Recallable for DashboardState {
+    type Memento = DashboardStateMemento;
+}
+
+#[automatically_derived]
+impl Recall for DashboardState {
+    #[inline]
+    fn recall(&mut self, memento: DashboardStateMemento) {
+        self.volume = memento.volume;
+        self.label = memento.label;
+        // cache_key is skipped — its value is preserved
+    }
+}
+```
+
+Run `cargo expand --package recallable --example basic_model` to see the full unabridged
+output, including serde's `Deserialize` implementation.
 
 ## API Reference
 
