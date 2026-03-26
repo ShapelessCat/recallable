@@ -24,8 +24,9 @@ impl MementoTraitSpec {
                     quote!(::core::cmp::PartialEq),
                 ]
             },
-            serde_derive_trait: serde_enabled.then_some(quote!(::serde::Deserialize)),
-            serde_nested_bound_trait: serde_enabled
+            serde_derive_trait: (serde_enabled && !derive_off)
+                .then_some(quote!(::serde::Deserialize)),
+            serde_nested_bound_trait: (serde_enabled && !derive_off)
                 .then_some(quote!(::serde::de::DeserializeOwned)),
         }
     }
@@ -297,7 +298,7 @@ mod tests {
         assert!(!derive_off_serde.contains("Clone"));
         assert!(!derive_off_serde.contains("Debug"));
         assert!(!derive_off_serde.contains("PartialEq"));
-        assert!(derive_off_serde.contains(":: serde :: Deserialize"));
+        assert!(!derive_off_serde.contains(":: serde :: Deserialize"));
 
         let derive_off_no_serde = MementoTraitSpec::new(false, true).derive_attr().to_string();
         assert!(derive_off_no_serde.is_empty());
@@ -307,6 +308,6 @@ mod tests {
     fn memento_trait_spec_derive_off_empties_common_bounds() {
         let spec = MementoTraitSpec::new(true, true);
         assert!(spec.common_bound_tokens().is_empty());
-        assert!(spec.serde_nested_bound().is_some());
+        assert!(spec.serde_nested_bound().is_none());
     }
 }
