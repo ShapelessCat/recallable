@@ -11,6 +11,9 @@ keywords.workspace = true
 documentation.workspace = true
 readme.workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+
 [lib]
 path = "src/lib.rs"
 
