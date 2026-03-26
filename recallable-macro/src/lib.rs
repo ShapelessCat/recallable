@@ -69,7 +69,12 @@ pub fn recallable_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// The generated memento struct always derives `Clone`, `Debug`, and `PartialEq`.
 /// When the `serde` feature is enabled, it also derives `serde::Deserialize`.
-/// All non-skipped field types must implement these traits.
+/// All non-skipped field types must implement these derived traits.
+///
+/// To suppress the default `Clone`, `Debug`, and `PartialEq` derives (and their
+/// corresponding trait bounds), annotate the struct with
+/// `#[recallable(memento_derive_off)]`. When serde is enabled, `Deserialize` is
+/// still derived on the memento even with this attribute.
 ///
 /// When the `impl_from` feature is enabled for the macro crate, a
 /// `From<Struct>` implementation is also generated for the memento type. For `#[recallable]`

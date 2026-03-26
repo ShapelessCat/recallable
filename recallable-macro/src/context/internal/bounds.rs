@@ -60,7 +60,11 @@ pub(crate) fn collect_shared_memento_bounds(
     ir: &StructIr,
     env: &CodegenEnv,
 ) -> Vec<WherePredicate> {
-    collect_shared_memento_bounds_with_spec(ir, env, &MementoTraitSpec::current(ir.memento_derive_off()))
+    collect_shared_memento_bounds_with_spec(
+        ir,
+        env,
+        &MementoTraitSpec::current(ir.memento_derive_off()),
+    )
 }
 
 fn collect_shared_memento_bounds_with_spec(
@@ -85,7 +89,12 @@ pub(crate) fn collect_recall_like_bounds(
     env: &CodegenEnv,
     direct_bound: &TokenStream2,
 ) -> Vec<WherePredicate> {
-    collect_recall_like_bounds_with_spec(ir, env, direct_bound, &MementoTraitSpec::current(ir.memento_derive_off()))
+    collect_recall_like_bounds_with_spec(
+        ir,
+        env,
+        direct_bound,
+        &MementoTraitSpec::current(ir.memento_derive_off()),
+    )
 }
 
 fn collect_recall_like_bounds_with_spec(
@@ -284,7 +293,9 @@ mod tests {
         assert!(serde_derives.contains(":: core :: cmp :: PartialEq"));
         assert!(serde_derives.contains(":: serde :: Deserialize"));
 
-        let no_serde_derives = MementoTraitSpec::new(false, false).derive_attr().to_string();
+        let no_serde_derives = MementoTraitSpec::new(false, false)
+            .derive_attr()
+            .to_string();
         assert!(no_serde_derives.contains(":: core :: clone :: Clone"));
         assert!(no_serde_derives.contains(":: core :: fmt :: Debug"));
         assert!(no_serde_derives.contains(":: core :: cmp :: PartialEq"));
