@@ -34,6 +34,11 @@ jobs:
       - name: Run clippy with all features
         run: cargo clippy --workspace --all-targets --all-features --verbose
 
+      - name: Check documentation builds
+        run: cargo doc --workspace --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
       - name: Run tests with default features (support serde)
         run: cargo test --verbose --package recallable
 
