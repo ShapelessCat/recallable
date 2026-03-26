@@ -35,8 +35,16 @@ Typical scenarios include:
 The provided procedural macros handle the heavy lifting; they generate companion memento types and recall logic. See
 [Features](#features) and [How It Works](#how-it-works) for details.
 
+## Design Philosophy
+
+This crate makes deliberate choices to encourage correct usage of the Memento pattern:
+
+- **No `#[derive(TryRecall)]`:** `TryRecall` exists precisely for custom, fallible validation logic. Because this domain-specific validation is unpredictable, auto-generating it would encourage bypassing the very checks the pattern is meant to enforce. You should implement it manually.
+- **Strict Memento Encapsulation:** Generated mementos have the same visibility as their parent structs, but their *fields* are always private. Mementos are opaque state tokens meant to be created and applied via `Recall` or `TryRecall`. Exposing their fields would encourage reaching into them, breaking the abstraction.
+
 ## Table of Contents
 
+- [Design Philosophy](#design-philosophy)
 - [Features](#features)
 - [Installation](#installation)
 - [Runnable Examples](#runnable-examples)
