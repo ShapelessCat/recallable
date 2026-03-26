@@ -6,6 +6,7 @@ use syn::{Fields, ItemStruct, parse_macro_input, parse_quote};
 
 use crate::context::{SERDE_ENABLED, crate_path, has_recallable_skip_attr};
 
+#[must_use]
 pub(super) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     if let Err(err) = validate_model_attr(attr.into()) {
         return err.to_compile_error().into();
@@ -18,15 +19,7 @@ pub(super) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         return e.to_compile_error().into();
     }
 
-    let derives = if SERDE_ENABLED {
-        parse_quote! {
-            #[derive(#crate_path::Recallable, #crate_path::Recall, ::serde::Serialize)]
-        }
-    } else {
-        parse_quote! {
-            #[derive(#crate_path::Recallable, #crate_path::Recall)]
-        }
-    };
+    let derives = build_model_derive_attr(&crate_path);
 
     input.attrs.push(derives);
 
@@ -43,6 +36,19 @@ fn validate_model_attr(attr: TokenStream2) -> syn::Result<()> {
         .map_err(|_| {
             syn::Error::new_spanned(attr, "`#[recallable_model]` does not accept arguments")
         })
+}
+
+#[must_use]
+fn build_model_derive_attr(crate_path: &TokenStream2) -> syn::Attribute {
+    if SERDE_ENABLED {
+        parse_quote! {
+            #[derive(#crate_path::Recallable, #crate_path::Recall, ::serde::Serialize)]
+        }
+    } else {
+        parse_quote! {
+            #[derive(#crate_path::Recallable, #crate_path::Recall)]
+        }
+    }
 }
 
 fn add_serde_skip_attrs(fields: &mut Fields) {

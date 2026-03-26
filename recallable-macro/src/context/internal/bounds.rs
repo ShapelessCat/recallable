@@ -4,6 +4,7 @@ use syn::WherePredicate;
 
 use super::ir::{CodegenEnv, StructIr};
 
+/// Policy for which derives and nested bounds the generated memento should receive.
 #[derive(Debug)]
 pub(crate) struct MementoTraitSpec {
     serde_enabled: bool,
@@ -18,6 +19,7 @@ impl MementoTraitSpec {
         }
     }
 
+    #[must_use]
     pub(crate) fn derive_attr(&self) -> TokenStream2 {
         match (self.has_common_traits(), self.serde_enabled) {
             (true, true) => {
@@ -62,6 +64,7 @@ impl MementoTraitSpec {
     }
 }
 
+#[must_use]
 pub(crate) fn collect_shared_memento_bounds(
     ir: &StructIr,
     env: &CodegenEnv,
@@ -86,6 +89,7 @@ fn collect_shared_memento_bounds_with_spec(
     bounds
 }
 
+#[must_use]
 pub(crate) fn collect_recall_like_bounds(
     ir: &StructIr,
     env: &CodegenEnv,

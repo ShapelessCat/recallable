@@ -38,6 +38,7 @@ pub(super) fn validate_no_borrowed_fields(
     }
 }
 
+#[must_use]
 pub(super) fn collect_struct_lifetimes(generics: &Generics) -> HashSet<&Ident> {
     generics
         .params
@@ -71,6 +72,7 @@ impl<'ast> Visit<'ast> for LifetimeUsageChecker<'_> {
 ///
 /// Because proc macros cannot resolve types, this also intentionally matches any
 /// user-defined type whose final path segment is `PhantomData`.
+#[must_use]
 pub(super) fn is_phantom_data(ty: &Type) -> bool {
     matches!(
         ty,
@@ -79,6 +81,7 @@ pub(super) fn is_phantom_data(ty: &Type) -> bool {
     )
 }
 
+#[must_use]
 pub(super) fn field_uses_struct_lifetime(ty: &Type, struct_lifetimes: &HashSet<&Ident>) -> bool {
     let mut checker = LifetimeUsageChecker {
         struct_lifetimes,

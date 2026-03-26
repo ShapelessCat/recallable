@@ -4,6 +4,7 @@ use syn::WherePredicate;
 
 use crate::context::{CodegenEnv, StructIr, collect_recall_like_bounds};
 
+#[must_use]
 pub(crate) fn gen_recallable_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
     let impl_generics = ir.impl_generics();
     let recallable_trait = &env.recallable_trait;

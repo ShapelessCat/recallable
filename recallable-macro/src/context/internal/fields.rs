@@ -158,6 +158,7 @@ pub(super) fn collect_field_irs<'a>(
     Ok((usage, field_irs))
 }
 
+#[must_use]
 pub(crate) fn has_recallable_skip_attr(field: &Field) -> bool {
     // Use determine_field_behavior for consistent validation.
     // In the attribute macro context, we intentionally ignore errors here

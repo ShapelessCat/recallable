@@ -32,7 +32,8 @@ mod model_macro;
 /// - When the `serde` feature is enabled for the macro crate, it also adds
 ///   `#[derive(serde::Serialize)]`.
 /// - For fields annotated with `#[recallable(skip)]`, it injects `#[serde(skip)]`
-///   to keep serde output aligned with recalling behavior.
+///   to keep serde output aligned with recall behavior.
+/// - This attribute itself takes no arguments.
 ///
 /// This macro preserves the original struct shape and only mutates attributes.
 ///

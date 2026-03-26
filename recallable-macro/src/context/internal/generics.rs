@@ -25,6 +25,7 @@ pub(super) struct GenericParamPlan<'a> {
 }
 
 impl<'a> GenericParamPlan<'a> {
+    #[must_use]
     pub(super) fn is_retained(&self) -> bool {
         !matches!(self.retention, GenericParamRetention::Dropped)
     }
@@ -33,6 +34,7 @@ impl<'a> GenericParamPlan<'a> {
         self.param
     }
 
+    #[must_use]
     pub(super) fn type_arg(&self) -> TokenStream2 {
         match self.param {
             GenericParam::Lifetime(param) => {
@@ -50,6 +52,7 @@ impl<'a> GenericParamPlan<'a> {
         }
     }
 
+    #[must_use]
     pub(super) fn recallable_ident(&self) -> Option<&'a Ident> {
         match (self.param, self.retention) {
             (GenericParam::Type(param), GenericParamRetention::RetainedAsRecallable) => {
@@ -74,6 +77,7 @@ pub(super) struct GenericParamLookup<'a> {
 }
 
 impl<'a> GenericParamLookup<'a> {
+    #[must_use]
     pub(super) fn new(generics: &'a Generics) -> Self {
         let mut type_params = HashMap::new();
         let mut const_params = HashMap::new();
@@ -100,6 +104,7 @@ impl<'a> GenericParamLookup<'a> {
         }
     }
 
+    #[must_use]
     pub(super) fn type_param_index(&self, ident: &Ident) -> Option<usize> {
         self.type_params.get(ident).copied()
     }
@@ -112,6 +117,7 @@ impl<'a> GenericParamLookup<'a> {
 /// Analysis-only classification for recalled field types.
 pub(super) struct BareTypeParam(pub(super) usize);
 
+#[must_use]
 pub(super) fn collect_marker_param_indices(
     fields: &[FieldIr<'_>],
     generic_params: &[GenericParamPlan<'_>],
@@ -132,6 +138,7 @@ pub(super) fn collect_marker_param_indices(
         .collect()
 }
 
+#[must_use]
 pub(super) fn plan_memento_generics<'a>(
     generics: &'a Generics,
     mut usage: GenericUsage,
@@ -298,6 +305,7 @@ impl<'ast, 'a> Visit<'ast> for GenericDependencyCollector<'a> {
     }
 }
 
+#[must_use]
 pub(super) fn collect_generic_dependencies_in_type(
     ty: &Type,
     generic_lookup: &GenericParamLookup<'_>,
@@ -325,6 +333,7 @@ fn collect_generic_dependencies_in_where_predicate(
     collector.dependencies
 }
 
+#[must_use]
 pub(super) fn marker_component(param: &GenericParam) -> TokenStream2 {
     match param {
         GenericParam::Lifetime(param) => {
@@ -342,6 +351,7 @@ pub(super) fn marker_component(param: &GenericParam) -> TokenStream2 {
     }
 }
 
+#[must_use]
 pub(crate) fn is_generic_type_param(ty: &Type, generic_type_params: &HashSet<&Ident>) -> bool {
     match ty {
         Type::Path(tp) if tp.qself.is_none() && tp.path.segments.len() == 1 => {
