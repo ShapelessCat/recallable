@@ -173,16 +173,16 @@ impl<'a> StructIr<'a> {
         quote! { #name #type_generics }
     }
 
-    pub(crate) fn memento_name(&self) -> &Ident {
+    pub(crate) const fn memento_name(&self) -> &Ident {
         &self.memento_name
     }
 
-    pub(crate) fn visibility(&self) -> &'a Visibility {
+    pub(crate) const fn visibility(&self) -> &'a Visibility {
         self.visibility
     }
 
     #[must_use]
-    pub(crate) fn shape(&self) -> StructShape {
+    pub(crate) const fn shape(&self) -> StructShape {
         self.shape
     }
 
@@ -191,12 +191,12 @@ impl<'a> StructIr<'a> {
         impl_generics
     }
 
-    pub(crate) fn generic_type_param_idents(&self) -> &HashSet<&'a Ident> {
+    pub(crate) const fn generic_type_param_idents(&self) -> &HashSet<&'a Ident> {
         &self.generic_type_param_idents
     }
 
     #[must_use]
-    pub(crate) fn memento_trait_spec(&self) -> MementoTraitSpec {
+    pub(crate) const fn memento_trait_spec(&self) -> MementoTraitSpec {
         MementoTraitSpec::new(SERDE_ENABLED, self.memento_derive_off)
     }
 
@@ -216,7 +216,7 @@ impl<'a> StructIr<'a> {
         }
     }
 
-    pub(crate) fn memento_where_clause(&self) -> Option<&WhereClause> {
+    pub(crate) const fn memento_where_clause(&self) -> Option<&WhereClause> {
         self.memento_where_clause.as_ref()
     }
 
@@ -230,7 +230,7 @@ impl<'a> StructIr<'a> {
     }
 
     #[must_use]
-    pub(crate) fn has_synthetic_marker(&self) -> bool {
+    pub(crate) const fn has_synthetic_marker(&self) -> bool {
         !self.marker_param_indices.is_empty()
     }
 

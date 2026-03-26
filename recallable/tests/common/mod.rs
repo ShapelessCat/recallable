@@ -164,7 +164,7 @@ pub(crate) fn property_outer_strategy() -> impl Strategy<Value = PropertyOuter> 
 
 // Build a known target state whose skipped field is caller-controlled. The
 // property tests use this to prove recall updates persisted fields only.
-pub(crate) fn property_seed(skipped_marker: u8) -> PropertyOuter {
+pub(crate) const fn property_seed(skipped_marker: u8) -> PropertyOuter {
     PropertyOuter {
         level: 0,
         threshold: 0,

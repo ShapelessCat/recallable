@@ -92,7 +92,7 @@ trait IsVecMemento {}
 
 impl<T> IsVecMemento for Vec<T> {}
 
-fn counter(value: i32) -> Counter {
+const fn counter(value: i32) -> Counter {
     Counter { value }
 }
 
