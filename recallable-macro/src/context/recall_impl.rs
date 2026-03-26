@@ -32,11 +32,9 @@ fn collect_recall_bounds(ir: &StructIr, env: &CodegenEnv) -> Vec<WherePredicate>
 }
 
 fn build_recall_method(ir: &StructIr, recall_trait: &TokenStream2) -> TokenStream2 {
-    let memento_fields: Vec<_> = ir.memento_fields().collect();
-    let recall_param_name = build_recall_param_name(&memento_fields);
-    let statements = memento_fields
-        .iter()
-        .map(|field| build_recall_statement(field, recall_trait));
+    let mut memento_fields = ir.memento_fields().peekable();
+    let recall_param_name = build_recall_param_name(memento_fields.peek().is_some());
+    let statements = memento_fields.map(|field| build_recall_statement(field, recall_trait));
 
     quote! {
         #[inline]
@@ -46,11 +44,11 @@ fn build_recall_method(ir: &StructIr, recall_trait: &TokenStream2) -> TokenStrea
     }
 }
 
-fn build_recall_param_name(memento_fields: &[&FieldIr]) -> TokenStream2 {
-    if memento_fields.is_empty() {
-        quote! { _memento }
-    } else {
+fn build_recall_param_name(has_memento_fields: bool) -> TokenStream2 {
+    if has_memento_fields {
         quote! { memento }
+    } else {
+        quote! { _memento }
     }
 }
 

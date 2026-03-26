@@ -14,7 +14,7 @@ use super::util::is_recallable_attr;
 enum FieldBehavior {
     /// Keep the field in the memento with its original type.
     Keep,
-    /// Store the field as an inner memento and this field can recalled recursively.
+    /// Store the field as an inner memento and recall this field recursively.
     Recall,
 }
 
@@ -109,56 +109,49 @@ pub(super) fn collect_field_irs<'a>(
     let mut memento_counter: usize = 0;
 
     for (index, field) in fields.iter().enumerate() {
-        if is_phantom_data(&field.ty) && field_uses_struct_lifetime(&field.ty, struct_lifetimes) {
+        let member = field_member(field, index);
+        let ty = &field.ty;
+
+        if is_phantom_data(ty) && field_uses_struct_lifetime(ty, struct_lifetimes) {
             field_irs.push(FieldIr {
                 memento_index: None,
-                member: field_member(field, index),
-                ty: &field.ty,
+                member,
+                ty,
                 strategy: FieldStrategy::Skip,
             });
             continue;
         }
 
-        match determine_field_behavior(field)? {
-            None => {
-                field_irs.push(FieldIr {
-                    memento_index: None,
-                    member: field_member(field, index),
-                    ty: &field.ty,
-                    strategy: FieldStrategy::Skip,
-                });
-            }
+        let strategy = match determine_field_behavior(field)? {
+            None => FieldStrategy::Skip,
             Some(FieldBehavior::Keep) => {
-                usage.retained.extend(collect_generic_dependencies_in_type(
-                    &field.ty,
-                    generic_lookup,
-                ));
-                field_irs.push(FieldIr {
-                    memento_index: Some(memento_counter),
-                    member: field_member(field, index),
-                    ty: &field.ty,
-                    strategy: FieldStrategy::StoreAsSelf,
-                });
-                memento_counter += 1;
+                usage
+                    .retained
+                    .extend(collect_generic_dependencies_in_type(ty, generic_lookup));
+                FieldStrategy::StoreAsSelf
             }
             Some(FieldBehavior::Recall) => {
-                usage.retained.extend(collect_generic_dependencies_in_type(
-                    &field.ty,
-                    generic_lookup,
-                ));
+                usage
+                    .retained
+                    .extend(collect_generic_dependencies_in_type(ty, generic_lookup));
                 if let Some(BareTypeParam(index)) =
-                    classify_recallable_field_type(&field.ty, generic_lookup)?
+                    classify_recallable_field_type(ty, generic_lookup)?
                 {
                     usage.recallable_type_params.insert(index);
                 }
-                field_irs.push(FieldIr {
-                    memento_index: Some(memento_counter),
-                    member: field_member(field, index),
-                    ty: &field.ty,
-                    strategy: FieldStrategy::StoreAsMemento,
-                });
-                memento_counter += 1;
+                FieldStrategy::StoreAsMemento
             }
+        };
+
+        let memento_index = (!strategy.is_skip()).then_some(memento_counter);
+        field_irs.push(FieldIr {
+            memento_index,
+            member,
+            ty,
+            strategy,
+        });
+        if memento_index.is_some() {
+            memento_counter += 1;
         }
     }
 

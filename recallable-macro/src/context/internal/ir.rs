@@ -49,7 +49,7 @@ pub(crate) enum FieldStrategy {
 }
 
 impl FieldStrategy {
-    pub(super) const fn is_skip(&self) -> bool {
+    pub(super) const fn is_skip(self) -> bool {
         matches!(self, Self::Skip)
     }
 }
@@ -198,14 +198,14 @@ impl<'a> StructIr<'a> {
     }
 
     pub(crate) fn memento_decl_generics(&self) -> TokenStream2 {
-        let params = self
+        let mut params = self
             .generic_params
             .iter()
             .filter(|plan| plan.is_retained())
             .map(GenericParamPlan::decl_param)
-            .collect::<Vec<_>>();
+            .peekable();
 
-        if params.is_empty() {
+        if params.peek().is_none() {
             quote! {}
         } else {
             quote! { <#(#params),*> }
@@ -251,14 +251,14 @@ impl<'a> StructIr<'a> {
 
     pub(crate) fn memento_type(&self) -> TokenStream2 {
         let name = &self.memento_name;
-        let args: Vec<_> = self
+        let mut args = self
             .generic_params
             .iter()
             .filter(|plan| plan.is_retained())
             .map(GenericParamPlan::type_arg)
-            .collect();
+            .peekable();
 
-        if args.is_empty() {
+        if args.peek().is_none() {
             quote! { #name }
         } else {
             quote! { #name<#(#args),*> }
