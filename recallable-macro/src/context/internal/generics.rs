@@ -29,8 +29,8 @@ impl<'a> GenericParamPlan<'a> {
         !matches!(self.retention, GenericParamRetention::Dropped)
     }
 
-    pub(super) fn decl_param(&self) -> GenericParam {
-        self.param.clone()
+    pub(super) fn decl_param(&self) -> &GenericParam {
+        self.param
     }
 
     pub(super) fn type_arg(&self) -> TokenStream2 {
@@ -117,13 +117,11 @@ pub(super) fn collect_marker_param_indices(
     generic_params: &[GenericParamPlan<'_>],
     generic_lookup: &GenericParamLookup<'_>,
 ) -> Vec<usize> {
-    let mut referenced_by_fields = HashSet::new();
-    for field in fields.iter().filter(|field| !field.strategy.is_skip()) {
-        referenced_by_fields.extend(collect_generic_dependencies_in_type(
-            field.ty,
-            generic_lookup,
-        ));
-    }
+    let referenced_by_fields: HashSet<_> = fields
+        .iter()
+        .filter(|field| !field.strategy.is_skip())
+        .flat_map(|field| collect_generic_dependencies_in_type(field.ty, generic_lookup))
+        .collect();
 
     generic_params
         .iter()
@@ -159,7 +157,7 @@ pub(super) fn plan_memento_generics<'a>(
                 .iter()
                 .map(|predicate| {
                     (
-                        predicate.clone(),
+                        predicate,
                         collect_generic_dependencies_in_where_predicate(predicate, generic_lookup),
                     )
                 })

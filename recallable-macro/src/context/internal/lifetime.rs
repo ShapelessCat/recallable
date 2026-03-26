@@ -72,15 +72,11 @@ impl<'ast> Visit<'ast> for LifetimeUsageChecker<'_> {
 /// Because proc macros cannot resolve types, this also intentionally matches any
 /// user-defined type whose final path segment is `PhantomData`.
 pub(super) fn is_phantom_data(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty {
-        type_path
-            .path
-            .segments
-            .last()
-            .is_some_and(|seg| seg.ident == "PhantomData")
-    } else {
-        false
-    }
+    matches!(
+        ty,
+        Type::Path(p)
+        if p.path.segments.last().is_some_and(|seg| seg.ident == "PhantomData")
+    )
 }
 
 pub(super) fn field_uses_struct_lifetime(ty: &Type, struct_lifetimes: &HashSet<&Ident>) -> bool {

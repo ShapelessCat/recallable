@@ -46,8 +46,8 @@ impl MementoTraitSpec {
         quote! { #(#common_traits)+* }
     }
 
-    fn serde_nested_bound(&self) -> Option<TokenStream2> {
-        self.serde_nested_bound_trait.clone()
+    fn serde_nested_bound(&self) -> Option<&TokenStream2> {
+        self.serde_nested_bound_trait.as_ref()
     }
 }
 
@@ -69,7 +69,7 @@ fn collect_shared_memento_bounds_with_spec(
     let mut bounds = ir.recallable_memento_bounds(&memento_trait_bounds);
     bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &memento_trait_bounds));
     if let Some(deserialize_owned) = memento_trait_spec.serde_nested_bound() {
-        bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &deserialize_owned));
+        bounds.extend(ir.whole_type_memento_bounds(recallable_trait, deserialize_owned));
     }
 
     bounds
