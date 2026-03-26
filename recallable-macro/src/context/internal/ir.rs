@@ -49,7 +49,7 @@ pub(crate) enum FieldStrategy {
 }
 
 impl FieldStrategy {
-    pub(crate) const fn is_skip(&self) -> bool {
+    pub(super) const fn is_skip(&self) -> bool {
         matches!(self, Self::Skip)
     }
 }
@@ -269,13 +269,13 @@ impl<'a> StructIr<'a> {
         self.fields.iter().filter(|field| !field.strategy.is_skip())
     }
 
-    pub(crate) fn recallable_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
+    pub(super) fn recallable_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
         self.recallable_params()
             .map(|ty| syn::parse_quote! { #ty: #bound })
             .collect()
     }
 
-    pub(crate) fn recallable_memento_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
+    pub(super) fn recallable_memento_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
         self.recallable_params()
             .map(|ty| syn::parse_quote! { #ty::Memento: #bound })
             .collect()
@@ -298,14 +298,14 @@ impl<'a> StructIr<'a> {
             .collect()
     }
 
-    pub(crate) fn whole_type_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
+    pub(super) fn whole_type_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
         self.whole_type_bound_targets()
             .into_iter()
             .map(|ty| syn::parse_quote! { #ty: #bound })
             .collect()
     }
 
-    pub(crate) fn whole_type_memento_bounds(
+    pub(super) fn whole_type_memento_bounds(
         &self,
         recallable_trait: &TokenStream2,
         bound: &TokenStream2,

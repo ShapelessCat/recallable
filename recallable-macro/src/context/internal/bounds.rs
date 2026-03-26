@@ -12,7 +12,7 @@ pub(crate) struct MementoTraitSpec {
 }
 
 impl MementoTraitSpec {
-    pub(crate) fn new(serde_enabled: bool, derive_off: bool) -> Self {
+    pub(super) fn new(serde_enabled: bool, derive_off: bool) -> Self {
         Self {
             common_traits: if derive_off {
                 vec![]
