@@ -6,6 +6,7 @@ use crate::context::{
     CodegenEnv, FieldIr, FieldStrategy, StructIr, StructShape, collect_shared_memento_bounds,
 };
 
+#[must_use]
 pub(crate) fn gen_from_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
     let impl_generics = ir.impl_generics();
     let struct_type = ir.struct_type();

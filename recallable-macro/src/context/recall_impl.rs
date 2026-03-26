@@ -6,6 +6,7 @@ use crate::context::{
     CodegenEnv, FieldIr, FieldMember, FieldStrategy, StructIr, collect_recall_like_bounds,
 };
 
+#[must_use]
 pub(crate) fn gen_recall_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
     let recall_trait = &env.recall_trait;
     let impl_generics = ir.impl_generics();

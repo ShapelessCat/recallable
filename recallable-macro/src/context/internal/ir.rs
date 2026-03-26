@@ -63,6 +63,7 @@ pub(crate) struct CodegenEnv {
 }
 
 impl CodegenEnv {
+    #[must_use]
     pub(crate) fn resolve() -> Self {
         let crate_path = crate_path();
         Self {
@@ -180,6 +181,7 @@ impl<'a> StructIr<'a> {
         self.visibility
     }
 
+    #[must_use]
     pub(crate) fn shape(&self) -> StructShape {
         self.shape
     }
@@ -193,10 +195,12 @@ impl<'a> StructIr<'a> {
         &self.generic_type_param_idents
     }
 
+    #[must_use]
     pub(crate) fn memento_trait_spec(&self) -> MementoTraitSpec {
         MementoTraitSpec::new(SERDE_ENABLED, self.memento_derive_off)
     }
 
+    #[must_use]
     pub(crate) fn memento_decl_generics(&self) -> TokenStream2 {
         let mut params = self
             .generic_params
@@ -216,6 +220,7 @@ impl<'a> StructIr<'a> {
         self.memento_where_clause.as_ref()
     }
 
+    #[must_use]
     pub(crate) fn generated_memento_shape(&self) -> StructShape {
         if self.shape == StructShape::Unit && self.has_synthetic_marker() {
             StructShape::Named
@@ -224,10 +229,12 @@ impl<'a> StructIr<'a> {
         }
     }
 
+    #[must_use]
     pub(crate) fn has_synthetic_marker(&self) -> bool {
         !self.marker_param_indices.is_empty()
     }
 
+    #[must_use]
     pub(crate) fn synthetic_marker_type(&self) -> Option<TokenStream2> {
         if self.marker_param_indices.is_empty() {
             return None;
@@ -249,6 +256,7 @@ impl<'a> StructIr<'a> {
             .filter_map(GenericParamPlan::recallable_ident)
     }
 
+    #[must_use]
     pub(crate) fn memento_type(&self) -> TokenStream2 {
         let name = &self.memento_name;
         let mut args = self
@@ -298,6 +306,7 @@ impl<'a> StructIr<'a> {
             .collect()
     }
 
+    #[must_use]
     pub(super) fn whole_type_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
         self.whole_type_bound_targets()
             .into_iter()

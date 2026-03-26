@@ -8,6 +8,7 @@ use crate::context::{
     collect_recall_like_bounds, is_generic_type_param,
 };
 
+#[must_use]
 pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
     let derives = ir.memento_trait_spec().derive_attr();
     let visibility = ir.visibility();
@@ -24,15 +25,7 @@ pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv) -> TokenStream
 fn build_memento_body(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
     let shape = ir.generated_memento_shape();
     let where_clause = build_memento_where_clause(ir, env);
-    let recallable_trait = &env.recallable_trait;
-    let fields = ir
-        .memento_fields()
-        .map(|field| build_memento_field(field, recallable_trait, ir.generic_type_param_idents()))
-        .chain(
-            ir.synthetic_marker_type()
-                .into_iter()
-                .map(|marker_ty| build_marker_field(&marker_ty, shape)),
-        );
+    let fields = memento_fields_with_marker(ir, env, shape);
 
     match shape {
         StructShape::Named => quote! { #where_clause { #(#fields),* } },
@@ -58,6 +51,22 @@ fn build_memento_where_clause(ir: &StructIr, env: &CodegenEnv) -> Option<WhereCl
 
 fn collect_memento_bounds(ir: &StructIr, env: &CodegenEnv) -> Vec<WherePredicate> {
     collect_recall_like_bounds(ir, env, &env.recallable_trait)
+}
+
+fn memento_fields_with_marker<'ir, 'input>(
+    ir: &'ir StructIr<'input>,
+    env: &'ir CodegenEnv,
+    shape: StructShape,
+) -> impl Iterator<Item = TokenStream2> + 'ir {
+    let recallable_trait = &env.recallable_trait;
+
+    ir.memento_fields()
+        .map(|field| build_memento_field(field, recallable_trait, ir.generic_type_param_idents()))
+        .chain(
+            ir.synthetic_marker_type()
+                .into_iter()
+                .map(move |marker_ty| build_marker_field(&marker_ty, shape)),
+        )
 }
 
 fn build_marker_field(marker_ty: &TokenStream2, shape: StructShape) -> TokenStream2 {

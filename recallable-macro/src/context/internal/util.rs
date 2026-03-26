@@ -15,6 +15,7 @@ const RECALLABLE: &str = "recallable";
 /// rustdoc compiles them as external crates, so `crate` would point at the
 /// temporary doctest crate rather than the real `recallable` library.
 #[inline]
+#[must_use]
 pub(crate) fn crate_path() -> TokenStream2 {
     match crate_name(RECALLABLE) {
         Ok(FoundCrate::Itself) => quote! { ::recallable },
@@ -27,6 +28,7 @@ pub(crate) fn crate_path() -> TokenStream2 {
 }
 
 #[inline]
+#[must_use]
 pub(super) fn is_recallable_attr(attr: &Attribute) -> bool {
     attr.path().is_ident(RECALLABLE)
 }
