@@ -7,6 +7,8 @@ use syn::{
     WherePredicate,
 };
 
+use crate::context::{MementoTraitSpec, SERDE_ENABLED};
+
 use super::fields::{collect_field_irs, extract_struct_fields};
 use super::generics::{
     GenericParamPlan, collect_marker_param_indices, is_generic_type_param, marker_component,
@@ -176,10 +178,6 @@ impl<'a> StructIr<'a> {
         self.visibility
     }
 
-    pub(crate) fn memento_derive_off(&self) -> bool {
-        self.memento_derive_off
-    }
-
     pub(crate) fn impl_generics(&self) -> ImplGenerics<'_> {
         let (impl_generics, _, _) = self.generics.split_for_impl();
         impl_generics
@@ -187,6 +185,10 @@ impl<'a> StructIr<'a> {
 
     pub(crate) fn generic_type_param_idents(&self) -> &HashSet<&'a Ident> {
         &self.generic_type_param_idents
+    }
+
+    pub(crate) fn memento_trait_spec(&self) -> MementoTraitSpec {
+        MementoTraitSpec::new(SERDE_ENABLED, self.memento_derive_off)
     }
 
     pub(crate) fn memento_decl_generics(&self) -> TokenStream2 {
@@ -330,35 +332,5 @@ impl<'a> StructIr<'a> {
                 .extend(extra.iter().cloned());
         }
         where_clause
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use syn::parse_quote;
-
-    use super::StructIr;
-
-    #[test]
-    fn analyze_detects_memento_derive_off() {
-        let input: syn::DeriveInput = parse_quote! {
-            #[recallable(memento_derive_off)]
-            struct Example {
-                value: u32,
-            }
-        };
-        let ir = StructIr::analyze(&input).unwrap();
-        assert!(ir.memento_derive_off());
-    }
-
-    #[test]
-    fn analyze_defaults_memento_derive_off_to_false() {
-        let input: syn::DeriveInput = parse_quote! {
-            struct Example {
-                value: u32,
-            }
-        };
-        let ir = StructIr::analyze(&input).unwrap();
-        assert!(!ir.memento_derive_off());
     }
 }

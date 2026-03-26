@@ -7,7 +7,6 @@ mod ir;
 mod lifetime;
 mod util;
 
-use super::SERDE_ENABLED;
 pub(crate) use bounds::{
     MementoTraitSpec, collect_recall_like_bounds, collect_shared_memento_bounds,
 };
