@@ -108,3 +108,42 @@ fn build_memento_field(
         FieldMember::Unnamed(_) => quote! { #field_ty },
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use quote::{ToTokens, quote};
+    use syn::parse_quote;
+
+    use super::{CodegenEnv, StructIr, gen_memento_struct};
+
+    #[test]
+    fn generated_memento_visibility_matches_companion_struct() {
+        let env = CodegenEnv {
+            recallable_trait: quote!(::recallable::Recallable),
+            recall_trait: quote!(::recallable::Recall),
+        };
+
+        let restricted_input: syn::DeriveInput = parse_quote! {
+            pub(crate) struct Example {
+                value: u32,
+            }
+        };
+        let restricted_ir = StructIr::analyze(&restricted_input).unwrap();
+        let restricted_memento: syn::ItemStruct =
+            syn::parse2(gen_memento_struct(&restricted_ir, &env)).unwrap();
+        assert_eq!(
+            restricted_memento.vis.to_token_stream().to_string(),
+            quote!(pub(crate)).to_string()
+        );
+
+        let private_input: syn::DeriveInput = parse_quote! {
+            struct PrivateExample {
+                value: u32,
+            }
+        };
+        let private_ir = StructIr::analyze(&private_input).unwrap();
+        let private_memento: syn::ItemStruct =
+            syn::parse2(gen_memento_struct(&private_ir, &env)).unwrap();
+        assert!(matches!(private_memento.vis, syn::Visibility::Inherited));
+    }
+}
