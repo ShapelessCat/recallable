@@ -289,12 +289,12 @@ impl<'a> StructIr<'a> {
             .collect()
     }
 
-    fn whole_type_bound_targets(&self) -> Vec<&Type> {
+    fn whole_type_bound_targets(&self) -> impl Iterator<Item = &Type> {
         let mut seen = HashSet::new();
 
         self.fields
             .iter()
-            .filter_map(|field| match field.strategy {
+            .filter_map(move |field| match field.strategy {
                 FieldStrategy::StoreAsMemento
                     if !is_generic_type_param(field.ty, &self.generic_type_param_idents)
                         && seen.insert(field.ty) =>
@@ -303,13 +303,11 @@ impl<'a> StructIr<'a> {
                 }
                 _ => None,
             })
-            .collect()
     }
 
     #[must_use]
     pub(super) fn whole_type_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
         self.whole_type_bound_targets()
-            .into_iter()
             .map(|ty| syn::parse_quote! { #ty: #bound })
             .collect()
     }
@@ -320,7 +318,6 @@ impl<'a> StructIr<'a> {
         bound: &TokenStream2,
     ) -> impl Iterator<Item = WherePredicate> {
         self.whole_type_bound_targets()
-            .into_iter()
             .map(move |ty| syn::parse_quote! { <#ty as #recallable_trait>::Memento: #bound })
     }
 
@@ -329,7 +326,6 @@ impl<'a> StructIr<'a> {
         recallable_trait: &TokenStream2,
     ) -> impl Iterator<Item = WherePredicate> {
         self.whole_type_bound_targets()
-            .into_iter()
             .flat_map(move |ty| {
                 [
                     syn::parse_quote! { #ty: #recallable_trait },
