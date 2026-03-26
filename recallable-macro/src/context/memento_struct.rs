@@ -4,12 +4,12 @@ use std::collections::HashSet;
 use syn::{Ident, WhereClause, WherePredicate};
 
 use crate::context::{
-    CodegenEnv, FieldIr, FieldMember, FieldStrategy, MementoTraitSpec, SERDE_ENABLED, StructIr,
-    StructShape, collect_recall_like_bounds, is_generic_type_param,
+    CodegenEnv, FieldIr, FieldMember, FieldStrategy, SERDE_ENABLED, StructIr, StructShape,
+    collect_recall_like_bounds, is_generic_type_param,
 };
 
 pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
-    let derives = MementoTraitSpec::current(ir.memento_derive_off()).derive_attr();
+    let derives = &ir.memento_trait_spec().derive_attr();
     let visibility = ir.visibility();
     let memento_name = ir.memento_name();
     let memento_generics = ir.memento_decl_generics();
@@ -37,15 +37,15 @@ fn build_memento_where_clause(ir: &StructIr, env: &CodegenEnv) -> Option<WhereCl
     let mut where_clause = ir
         .memento_where_clause()
         .cloned()
-        .unwrap_or_else(|| syn::parse_quote! { where });
+        .unwrap_or(syn::parse_quote! { where });
     let bounded_types = collect_memento_bounds(ir, env);
-
-    if bounded_types.is_empty() && where_clause.predicates.is_empty() {
-        return None;
-    }
-
     where_clause.predicates.extend(bounded_types);
-    Some(where_clause)
+
+    if where_clause.predicates.is_empty() {
+        None
+    } else {
+        Some(where_clause)
+    }
 }
 
 fn collect_memento_bounds(ir: &StructIr, env: &CodegenEnv) -> Vec<WherePredicate> {

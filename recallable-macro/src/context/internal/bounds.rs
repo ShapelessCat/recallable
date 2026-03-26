@@ -2,7 +2,6 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::WherePredicate;
 
-use super::SERDE_ENABLED;
 use super::ir::{CodegenEnv, StructIr};
 
 #[derive(Debug)]
@@ -13,7 +12,7 @@ pub(crate) struct MementoTraitSpec {
 }
 
 impl MementoTraitSpec {
-    fn new(serde_enabled: bool, derive_off: bool) -> Self {
+    pub fn new(serde_enabled: bool, derive_off: bool) -> Self {
         Self {
             common_traits: if derive_off {
                 vec![]
@@ -28,10 +27,6 @@ impl MementoTraitSpec {
             serde_nested_bound_trait: serde_enabled
                 .then_some(quote!(::serde::de::DeserializeOwned)),
         }
-    }
-
-    pub(crate) fn current(derive_off: bool) -> Self {
-        Self::new(SERDE_ENABLED, derive_off)
     }
 
     pub(crate) fn derive_attr(&self) -> TokenStream2 {
@@ -60,11 +55,7 @@ pub(crate) fn collect_shared_memento_bounds(
     ir: &StructIr,
     env: &CodegenEnv,
 ) -> Vec<WherePredicate> {
-    collect_shared_memento_bounds_with_spec(
-        ir,
-        env,
-        &MementoTraitSpec::current(ir.memento_derive_off()),
-    )
+    collect_shared_memento_bounds_with_spec(ir, env, &ir.memento_trait_spec())
 }
 
 fn collect_shared_memento_bounds_with_spec(
@@ -89,12 +80,7 @@ pub(crate) fn collect_recall_like_bounds(
     env: &CodegenEnv,
     direct_bound: &TokenStream2,
 ) -> Vec<WherePredicate> {
-    collect_recall_like_bounds_with_spec(
-        ir,
-        env,
-        direct_bound,
-        &MementoTraitSpec::current(ir.memento_derive_off()),
-    )
+    collect_recall_like_bounds_with_spec(ir, env, direct_bound, &ir.memento_trait_spec())
 }
 
 fn collect_recall_like_bounds_with_spec(
