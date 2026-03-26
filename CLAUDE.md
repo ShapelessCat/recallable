@@ -37,13 +37,20 @@ CI runs the test matrix on stable and validates the MSRV on Rust 1.88.0. Coverag
 
 - `lib.rs` — three entry points: `#[recallable_model]` attribute macro, `#[derive(Recallable)]`, `#[derive(Recall)]`
 - `model_macro.rs` — `#[recallable_model]` expansion: injects derives, detects duplicate `Serialize`, adds `#[serde(skip)]`
-- `context.rs` — `StructIr` (semantic IR), `CodegenEnv` (crate paths), `MementoTraitSpec` (derive/bound logic); all analysis and IR types live here
+- `context.rs` — codegen facade: re-exports IR types from `internal`, owns feature-flag constants, hosts codegen submodules
+- `context/internal.rs` — re-export hub for the `internal` submodules
+- `context/internal/ir.rs` — `StructIr` (semantic IR, built by `StructIr::analyze()`), `CodegenEnv`, `FieldIr`, `FieldMember`, `FieldStrategy`, `StructShape`
+- `context/internal/bounds.rs` — `MementoTraitSpec`, `collect_recall_like_bounds`, `collect_shared_memento_bounds`
+- `context/internal/generics.rs` — `GenericParamPlan`, `GenericDependencyCollector`, `is_generic_type_param`, generic retention fixed-point loop
+- `context/internal/fields.rs` — field analysis: `has_recallable_skip_attr`, field strategy classification
+- `context/internal/lifetime.rs` — `LifetimeUsageChecker` (`syn::Visit` walker for borrowed-field rejection)
+- `context/internal/util.rs` — `crate_path` helper
 - `context/memento_struct.rs` — generates the companion `{Name}Memento` struct
 - `context/recallable_impl.rs` — generates `Recallable` trait impl
 - `context/recall_impl.rs` — generates `Recall` trait impl
 - `context/from_impl.rs` — generates `From<Struct>` for memento (behind `impl_from` feature)
 
-#### IR types in `context.rs`
+#### IR types (in `context/internal/`)
 
 - `StructIr` — the sole IR; built by `StructIr::analyze()` from `DeriveInput`. Holds fields, generics plan, memento name, visibility, shape
 - `CodegenEnv` — resolved once per invocation: crate paths only (`recallable_trait`, `recall_trait`)
@@ -71,6 +78,7 @@ Code generation is free functions (`gen_memento_struct`, `gen_recallable_impl`, 
 - `#[recallable(skip)]` fields excluded from memento; with serde feature, also get `#[serde(skip)]`
 - Conflicting `#[recallable]` + `#[recallable(skip)]` on the same field is a compile error
 - Memento visibility matches the source struct (e.g. `pub(crate) struct` → `pub(crate) struct Memento`)
+- Memento fields are always private (no visibility modifiers emitted) — mementos are opaque state tokens, not a field-inspection surface
 - Memento types derive `Deserialize` but not `Serialize` (by design)
 - `#[recallable_model]` auto-derives `serde::Serialize` on the struct when the serde feature is
   enabled — adding a manual `#[derive(Serialize)]` is a compile error
