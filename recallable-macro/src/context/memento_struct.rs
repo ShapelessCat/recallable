@@ -9,7 +9,7 @@ use crate::context::{
 };
 
 pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
-    let derives = MementoTraitSpec::current().derive_attr();
+    let derives = MementoTraitSpec::current(ir.memento_derive_off()).derive_attr();
     let visibility = ir.visibility();
     let memento_name = ir.memento_name();
     let memento_generics = ir.memento_decl_generics();

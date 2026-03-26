@@ -13,21 +13,25 @@ pub(crate) struct MementoTraitSpec {
 }
 
 impl MementoTraitSpec {
-    fn new(serde_enabled: bool) -> Self {
+    fn new(serde_enabled: bool, derive_off: bool) -> Self {
         Self {
-            common_traits: vec![
-                quote!(::core::clone::Clone),
-                quote!(::core::fmt::Debug),
-                quote!(::core::cmp::PartialEq),
-            ],
+            common_traits: if derive_off {
+                vec![]
+            } else {
+                vec![
+                    quote!(::core::clone::Clone),
+                    quote!(::core::fmt::Debug),
+                    quote!(::core::cmp::PartialEq),
+                ]
+            },
             serde_derive_trait: serde_enabled.then_some(quote!(::serde::Deserialize)),
             serde_nested_bound_trait: serde_enabled
                 .then_some(quote!(::serde::de::DeserializeOwned)),
         }
     }
 
-    pub(crate) fn current() -> Self {
-        Self::new(SERDE_ENABLED)
+    pub(crate) fn current(derive_off: bool) -> Self {
+        Self::new(SERDE_ENABLED, derive_off)
     }
 
     pub(crate) fn derive_attr(&self) -> TokenStream2 {
@@ -35,7 +39,11 @@ impl MementoTraitSpec {
         if let Some(serde_derive_trait) = &self.serde_derive_trait {
             derive_traits.push(serde_derive_trait.clone());
         }
-        quote! { #[derive(#(#derive_traits),*)] }
+        if derive_traits.is_empty() {
+            quote! {}
+        } else {
+            quote! { #[derive(#(#derive_traits),*)] }
+        }
     }
 
     fn common_bound_tokens(&self) -> TokenStream2 {
@@ -52,7 +60,7 @@ pub(crate) fn collect_shared_memento_bounds(
     ir: &StructIr,
     env: &CodegenEnv,
 ) -> Vec<WherePredicate> {
-    collect_shared_memento_bounds_with_spec(ir, env, &MementoTraitSpec::current())
+    collect_shared_memento_bounds_with_spec(ir, env, &MementoTraitSpec::current(ir.memento_derive_off()))
 }
 
 fn collect_shared_memento_bounds_with_spec(
@@ -77,7 +85,7 @@ pub(crate) fn collect_recall_like_bounds(
     env: &CodegenEnv,
     direct_bound: &TokenStream2,
 ) -> Vec<WherePredicate> {
-    collect_recall_like_bounds_with_spec(ir, env, direct_bound, &MementoTraitSpec::current())
+    collect_recall_like_bounds_with_spec(ir, env, direct_bound, &MementoTraitSpec::current(ir.memento_derive_off()))
 }
 
 fn collect_recall_like_bounds_with_spec(
@@ -134,7 +142,7 @@ mod tests {
         };
 
         let shared_bounds: Vec<_> =
-            collect_shared_memento_bounds_with_spec(&ir, &env, &MementoTraitSpec::new(true))
+            collect_shared_memento_bounds_with_spec(&ir, &env, &MementoTraitSpec::new(true, false))
                 .into_iter()
                 .map(|predicate| predicate.to_token_stream().to_string())
                 .collect();
@@ -158,7 +166,7 @@ mod tests {
             &ir,
             &env,
             &env.recall_trait,
-            &MementoTraitSpec::new(true),
+            &MementoTraitSpec::new(true, false),
         )
         .into_iter()
         .map(|predicate| predicate.to_token_stream().to_string())
@@ -210,7 +218,7 @@ mod tests {
             vec![quote!(Wrapper<T>: ::recallable::Recallable).to_string()]
         );
 
-        let memento_trait_bounds = MementoTraitSpec::new(true).common_bound_tokens();
+        let memento_trait_bounds = MementoTraitSpec::new(true, false).common_bound_tokens();
         let whole_type_memento_bounds: Vec<_> = ir
             .whole_type_memento_bounds(&env.recallable_trait, &memento_trait_bounds)
             .map(|predicate| predicate.to_token_stream().to_string())
@@ -244,7 +252,7 @@ mod tests {
             &ir,
             &env,
             &env.recallable_trait,
-            &MementoTraitSpec::new(true),
+            &MementoTraitSpec::new(true, false),
         )
         .into_iter()
         .map(|predicate| predicate.to_token_stream().to_string())
@@ -270,16 +278,35 @@ mod tests {
 
     #[test]
     fn memento_trait_spec_formats_derives_for_serde_modes() {
-        let serde_derives = MementoTraitSpec::new(true).derive_attr().to_string();
+        let serde_derives = MementoTraitSpec::new(true, false).derive_attr().to_string();
         assert!(serde_derives.contains(":: core :: clone :: Clone"));
         assert!(serde_derives.contains(":: core :: fmt :: Debug"));
         assert!(serde_derives.contains(":: core :: cmp :: PartialEq"));
         assert!(serde_derives.contains(":: serde :: Deserialize"));
 
-        let no_serde_derives = MementoTraitSpec::new(false).derive_attr().to_string();
+        let no_serde_derives = MementoTraitSpec::new(false, false).derive_attr().to_string();
         assert!(no_serde_derives.contains(":: core :: clone :: Clone"));
         assert!(no_serde_derives.contains(":: core :: fmt :: Debug"));
         assert!(no_serde_derives.contains(":: core :: cmp :: PartialEq"));
         assert!(!no_serde_derives.contains(":: serde :: Deserialize"));
+    }
+
+    #[test]
+    fn memento_trait_spec_derive_off_suppresses_common_traits() {
+        let derive_off_serde = MementoTraitSpec::new(true, true).derive_attr().to_string();
+        assert!(!derive_off_serde.contains("Clone"));
+        assert!(!derive_off_serde.contains("Debug"));
+        assert!(!derive_off_serde.contains("PartialEq"));
+        assert!(derive_off_serde.contains(":: serde :: Deserialize"));
+
+        let derive_off_no_serde = MementoTraitSpec::new(false, true).derive_attr().to_string();
+        assert!(derive_off_no_serde.is_empty());
+    }
+
+    #[test]
+    fn memento_trait_spec_derive_off_empties_common_bounds() {
+        let spec = MementoTraitSpec::new(true, true);
+        assert!(spec.common_bound_tokens().is_empty());
+        assert!(spec.serde_nested_bound().is_some());
     }
 }
