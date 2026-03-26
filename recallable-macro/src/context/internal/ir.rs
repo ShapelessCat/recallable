@@ -7,7 +7,9 @@ use syn::{
     WherePredicate,
 };
 
-use crate::context::{MementoTraitSpec, SERDE_ENABLED};
+use crate::context::SERDE_ENABLED;
+
+use super::bounds::MementoTraitSpec;
 
 use super::fields::{collect_field_irs, extract_struct_fields};
 use super::generics::{
@@ -101,7 +103,7 @@ pub(crate) struct StructIr<'a> {
     name: &'a Ident,
     visibility: &'a Visibility,
     generics: &'a Generics,
-    pub(crate) shape: StructShape,
+    shape: StructShape,
     fields: Vec<FieldIr<'a>>,
     memento_name: Ident,
     generic_type_param_idents: HashSet<&'a Ident>,
@@ -119,7 +121,7 @@ fn has_memento_derive_off(input: &DeriveInput) -> syn::Result<bool> {
                 found = true;
                 Ok(())
             } else if meta.path.is_ident("skip") {
-                Ok(())
+                Err(meta.error("`skip` is a field-level attribute, not a struct-level attribute"))
             } else {
                 Err(meta.error("unrecognized `recallable` parameter"))
             }
@@ -176,6 +178,10 @@ impl<'a> StructIr<'a> {
 
     pub(crate) fn visibility(&self) -> &'a Visibility {
         self.visibility
+    }
+
+    pub(crate) fn shape(&self) -> StructShape {
+        self.shape
     }
 
     pub(crate) fn impl_generics(&self) -> ImplGenerics<'_> {

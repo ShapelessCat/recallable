@@ -1,0 +1,5 @@
+error: `skip` is a field-level attribute, not a struct-level attribute
+ --> tests/ui/derive_fail_recallable_skip_on_struct.rs:4:14
+  |
+4 | #[recallable(skip)]
+  |              ^^^^

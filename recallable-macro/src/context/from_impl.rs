@@ -35,7 +35,7 @@ fn build_from_method(ir: &StructIr) -> TokenStream2 {
 }
 
 fn build_from_body(ir: &StructIr) -> TokenStream2 {
-    match ir.shape {
+    match ir.shape() {
         StructShape::Named => build_named_from_body(ir),
         StructShape::Unnamed => build_unnamed_from_body(ir),
         StructShape::Unit => build_unit_from_body(ir),
