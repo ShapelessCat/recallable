@@ -6,6 +6,10 @@
 //! derive macros for `Recallable` and `Recall`, and an attribute macro `recallable_model`
 //! re-exported from `recallable_macro` for easy derivation.
 //!
+//! The crate itself is `#![no_std]`. Enabling the `serde` feature does not require `std`; it only
+//! turns on macro-generated serde support, and it remains usable in `no_std` environments when
+//! your serde stack is configured without `std`.
+//!
 //! ## Motivation
 //!
 //! Many systems receive incremental updates where only a subset of fields change or can be
