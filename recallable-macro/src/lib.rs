@@ -83,13 +83,13 @@ pub fn recallable_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_derive(Recallable, attributes(recallable))]
 pub fn derive_recallable(input: TokenStream) -> TokenStream {
     let input: DeriveInput = parse_macro_input!(input as DeriveInput);
-    let ir = match context::StructIr::analyze(&input) {
+    let ir = match context::ItemIr::analyze(&input) {
         Ok(ir) => ir,
         Err(e) => return e.to_compile_error().into(),
     };
     let env = context::CodegenEnv::resolve();
 
-    let memento_struct = context::gen_memento_struct(&ir, &env);
+    let memento_struct = context::gen_memento_type(&ir, &env);
     let recallable_impl = context::gen_recallable_impl(&ir, &env);
     let from_impl = if context::IMPL_FROM_ENABLED {
         let from_impl = context::gen_from_impl(&ir, &env);

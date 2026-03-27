@@ -1,11 +1,15 @@
 use std::collections::HashSet;
 
-use syn::{Data, DataStruct, DeriveInput, Field, Fields, Index, Meta, PathArguments, Type};
+use syn::{
+    Data, DataEnum, DataStruct, DeriveInput, Field, Fields, Index, Meta, PathArguments, Type,
+    Variant,
+    punctuated::Punctuated,
+};
 
 use super::generics::{
     BareTypeParam, GenericParamLookup, GenericUsage, collect_generic_dependencies_in_type,
 };
-use super::ir::{FieldIr, FieldMember, FieldStrategy};
+use super::ir::{FieldIr, FieldMember, FieldStrategy, VariantIr, VariantShape};
 use super::lifetime::{field_uses_struct_lifetime, is_phantom_data};
 use super::util::is_recallable_attr;
 
@@ -25,6 +29,19 @@ pub(super) fn extract_struct_fields(input: &DeriveInput) -> syn::Result<&Fields>
         Err(syn::Error::new_spanned(
             input,
             "This derive macro can only be applied to structs",
+        ))
+    }
+}
+
+pub(super) fn extract_enum_variants(
+    input: &DeriveInput,
+) -> syn::Result<&Punctuated<Variant, syn::Token![,]>> {
+    if let Data::Enum(DataEnum { variants, .. }) = &input.data {
+        Ok(variants)
+    } else {
+        Err(syn::Error::new_spanned(
+            input,
+            "This derive macro can only be applied to structs or enums",
         ))
     }
 }
@@ -114,6 +131,7 @@ pub(super) fn collect_field_irs<'a>(
 
         if is_phantom_data(ty) && field_uses_struct_lifetime(ty, struct_lifetimes) {
             field_irs.push(FieldIr {
+                source: field,
                 memento_index: None,
                 member,
                 ty,
@@ -145,6 +163,7 @@ pub(super) fn collect_field_irs<'a>(
 
         let memento_index = (!strategy.is_skip()).then_some(memento_counter);
         field_irs.push(FieldIr {
+            source: field,
             memento_index,
             member,
             ty,
@@ -156,6 +175,38 @@ pub(super) fn collect_field_irs<'a>(
     }
 
     Ok((usage, field_irs))
+}
+
+pub(super) fn collect_variant_irs<'a>(
+    variants: &'a Punctuated<Variant, syn::Token![,]>,
+    struct_lifetimes: &HashSet<&'a syn::Ident>,
+    generic_lookup: &GenericParamLookup<'a>,
+) -> syn::Result<(GenericUsage, Vec<VariantIr<'a>>)> {
+    let mut usage = GenericUsage::default();
+    let mut variant_irs = Vec::with_capacity(variants.len());
+
+    for variant in variants {
+        let (variant_usage, fields) =
+            collect_field_irs(&variant.fields, struct_lifetimes, generic_lookup)?;
+        usage.retained.extend(variant_usage.retained);
+        usage
+            .recallable_type_params
+            .extend(variant_usage.recallable_type_params);
+
+        let shape = match &variant.fields {
+            Fields::Named(_) => VariantShape::Named,
+            Fields::Unnamed(_) => VariantShape::Unnamed,
+            Fields::Unit => VariantShape::Unit,
+        };
+
+        variant_irs.push(VariantIr {
+            name: &variant.ident,
+            shape,
+            fields,
+        });
+    }
+
+    Ok((usage, variant_irs))
 }
 
 #[must_use]
