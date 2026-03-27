@@ -282,7 +282,7 @@ dependencies = [
 
 [[package]]
 name = "recallable"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "heapless 0.9.2",
@@ -296,7 +296,7 @@ dependencies = [
 
 [[package]]
 name = "recallable-macro"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
