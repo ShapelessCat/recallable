@@ -4,9 +4,12 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{Ident, WhereClause, WherePredicate};
 
-use crate::context::{
-    CodegenEnv, EnumIr, FieldMember, FieldStrategy, SERDE_ENABLED, VariantIr, VariantShape,
-    collect_recall_like_bounds_for_enum, is_generic_type_param,
+use crate::context::SERDE_ENABLED;
+use crate::context::internal::enums::{
+    EnumIr, VariantIr, VariantShape, collect_recall_like_bounds_for_enum,
+};
+use crate::context::internal::shared::{
+    CodegenEnv, FieldIr, FieldMember, FieldStrategy, is_generic_type_param,
 };
 
 #[must_use]
@@ -18,8 +21,18 @@ pub(crate) fn gen_memento_enum(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 {
     let where_clause = build_memento_where_clause(ir, env);
     let variants = ir
         .variants()
-        .map(|variant| build_memento_variant(variant, &env.recallable_trait, ir.generic_type_param_idents()))
-        .chain(ir.synthetic_marker_type().into_iter().map(|marker_ty| build_marker_variant(&marker_ty)));
+        .map(|variant| {
+            build_memento_variant(
+                variant,
+                &env.recallable_trait,
+                ir.generic_type_param_idents(),
+            )
+        })
+        .chain(
+            ir.synthetic_marker_type()
+                .into_iter()
+                .map(|marker_ty| build_marker_variant(&marker_ty)),
+        );
 
     quote! {
         #derives
@@ -75,7 +88,7 @@ fn build_memento_variant(
 }
 
 fn build_memento_field(
-    field: &crate::context::FieldIr<'_>,
+    field: &FieldIr<'_>,
     recallable_trait: &TokenStream2,
     generic_type_params: &HashSet<&Ident>,
 ) -> TokenStream2 {

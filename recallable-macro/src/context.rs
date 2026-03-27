@@ -1,6 +1,7 @@
-//! # Struct IR and Code Generation
+//! # Derive Backend Facade
 //!
-//! Semantic analysis and support logic live in the nested `internal` module.
+//! Semantic analysis and item-kind-specific support logic live in the nested
+//! `internal` module.
 //!
 //! Code generation remains split into free functions in submodules:
 //! - `gen_memento_type` — companion memento struct or enum definition
@@ -14,19 +15,41 @@ mod memento;
 mod recall_impl;
 mod recallable_impl;
 
+use syn::DeriveInput;
+
+use self::internal::shared::ItemIr;
+
 pub(super) use from_impl::gen_from_impl;
-pub(super) use internal::{
-    CodegenEnv, EnumIr, EnumRecallMode, FieldIr, FieldMember, FieldStrategy, ItemIr, StructIr,
-    StructShape, VariantIr, VariantShape, collect_recall_like_bounds,
-    collect_recall_like_bounds_for_enum, collect_shared_memento_bounds,
-    collect_shared_memento_bounds_for_enum, crate_path, has_recallable_skip_attr,
-    is_generic_type_param,
-};
+pub(super) use internal::shared::{CodegenEnv, crate_path, has_recallable_skip_attr};
 pub(super) use recall_impl::gen_recall_impl;
 pub(super) use recallable_impl::gen_recallable_impl;
 
 pub(super) const SERDE_ENABLED: bool = cfg!(feature = "serde");
 pub(super) const IMPL_FROM_ENABLED: bool = cfg!(feature = "impl_from");
+
+pub(super) fn analyze_item(input: &DeriveInput) -> syn::Result<ItemIr<'_>> {
+    ItemIr::analyze(input)
+}
+
+pub(super) fn analyze_recall_input(input: &DeriveInput) -> syn::Result<ItemIr<'_>> {
+    let ir = analyze_item(input)?;
+
+    if let ItemIr::Enum(enum_ir) = &ir {
+        enum_ir.ensure_recall_derive_allowed()?;
+    }
+
+    Ok(ir)
+}
+
+pub(super) fn analyze_model_input(input: &DeriveInput) -> syn::Result<ItemIr<'_>> {
+    let ir = analyze_item(input)?;
+
+    if let ItemIr::Enum(enum_ir) = &ir {
+        enum_ir.ensure_model_derive_allowed()?;
+    }
+
+    Ok(ir)
+}
 
 pub(crate) fn gen_memento_type(ir: &ItemIr, env: &CodegenEnv) -> proc_macro2::TokenStream {
     memento::gen_memento_type(ir, env)
@@ -37,11 +60,15 @@ mod tests {
     use quote::ToTokens;
     use syn::parse_quote;
 
-    use super::{CodegenEnv, ItemIr, gen_memento_type};
+    use super::{CodegenEnv, analyze_item, analyze_recall_input, gen_memento_type};
 
     #[test]
     fn split_internal_reexports_cover_both_item_kinds() {
-        use crate::context::internal::{enums::EnumIr, shared::CodegenEnv, structs::StructIr};
+        use crate::context::internal::{
+            enums::EnumIr,
+            shared::{CodegenEnv, ItemIr},
+            structs::StructIr,
+        };
         use syn::parse_quote;
 
         let struct_input: syn::DeriveInput = parse_quote! {
@@ -62,10 +89,27 @@ mod tests {
         assert_eq!(struct_ir.memento_name().to_string(), "ExampleMemento");
         assert_eq!(enum_ir.memento_name().to_string(), "ChoiceMemento");
         assert_eq!(
-            crate::context::memento::gen_memento_type(&crate::context::ItemIr::Struct(struct_ir), &env)
+            crate::context::memento::gen_memento_type(&ItemIr::Struct(struct_ir), &env)
                 .to_string()
                 .contains("ExampleMemento"),
             true
+        );
+    }
+
+    #[test]
+    fn helper_name_and_manual_only_guidance_manual_only_error() {
+        let input: syn::DeriveInput = parse_quote! {
+            enum Example {
+                Value(#[recallable] Inner),
+            }
+        };
+
+        let error = analyze_recall_input(&input).unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("derive `Recallable` and implement `Recall` or `TryRecall` manually")
         );
     }
 
@@ -78,7 +122,7 @@ mod tests {
             }
         };
 
-        let ir = ItemIr::analyze(&input).unwrap();
+        let ir = analyze_item(&input).unwrap();
         let env = CodegenEnv::resolve();
         let memento: syn::ItemStruct = syn::parse2(gen_memento_type(&ir, &env)).unwrap();
 

@@ -7,7 +7,8 @@
 //! - `#[recallable_model]`: injects `Recallable`/`Recall` derives for structs and
 //!   assignment-only enums; with the `serde` Cargo feature enabled for this macro
 //!   crate it also adds `serde::Serialize` and applies `#[serde(skip)]` to fields
-//!   marked `#[recallable(skip)]`.
+//!   marked `#[recallable(skip)]`. Complex enums should derive `Recallable` and
+//!   implement `Recall` or `TryRecall` manually.
 //!
 //! - `#[derive(Recallable)]`: generates an internal companion memento type, exposes
 //!   it as `<Type as Recallable>::Memento`, and emits the `Recallable` impl; with the
@@ -37,6 +38,8 @@ mod model_macro;
 /// - For fields annotated with `#[recallable(skip)]`, it injects `#[serde(skip)]`
 ///   to keep serde output aligned with recall behavior.
 /// - This attribute itself takes no arguments.
+/// - Complex enums with nested `#[recallable]` or skipped fields are rejected so
+///   the caller can keep `Recall` or `TryRecall` explicit.
 ///
 /// This macro preserves the original struct shape and only mutates attributes.
 ///
@@ -55,11 +58,13 @@ pub fn recallable_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Supports enums by generating an enum-shaped memento with matching variants.
 /// For enums, `#[derive(Recall)]` and `#[recallable_model]` are available only
 /// when every variant field is assignment-only.
+/// Complex enums can still derive `Recallable` alone and provide manual
+/// `Recall` or `TryRecall` implementations.
 ///
 /// The generated memento type:
-/// - mirrors the original struct shape (named/tuple/unit),
+/// - mirrors the original item shape (struct or enum),
 /// - includes fields unless marked with `#[recallable(skip)]`,
-/// - uses the same visibility as the input struct,
+/// - uses the same visibility as the input item,
 /// - keeps all generated fields private by omitting field-level visibility modifiers,
 /// - also derives `serde::Deserialize` when the `serde` feature is enabled for the
 ///   macro crate.
@@ -91,7 +96,7 @@ pub fn recallable_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_derive(Recallable, attributes(recallable))]
 pub fn derive_recallable(input: TokenStream) -> TokenStream {
     let input: DeriveInput = parse_macro_input!(input as DeriveInput);
-    let ir = match context::ItemIr::analyze(&input) {
+    let ir = match context::analyze_item(&input) {
         Ok(ir) => ir,
         Err(e) => return e.to_compile_error().into(),
     };
@@ -134,17 +139,14 @@ pub fn derive_recallable(input: TokenStream) -> TokenStream {
 /// For `#[recallable]` fields, replace/merge behavior comes from the field type's own
 /// `Recall` implementation.
 /// Enums are supported only when every variant field is assignment-only.
+/// For supported enums, the generated implementation restores the target variant
+/// from the memento directly.
 pub fn derive_recall(input: TokenStream) -> TokenStream {
     let input: DeriveInput = parse_macro_input!(input as DeriveInput);
-    let ir = match context::ItemIr::analyze(&input) {
+    let ir = match context::analyze_recall_input(&input) {
         Ok(ir) => ir,
         Err(e) => return e.to_compile_error().into(),
     };
-    if let context::ItemIr::Enum(enum_ir) = &ir
-        && let Err(e) = enum_ir.ensure_recall_derivable()
-    {
-        return e.to_compile_error().into();
-    }
     let env = context::CodegenEnv::resolve();
 
     let recall_impl = context::gen_recall_impl(&ir, &env);

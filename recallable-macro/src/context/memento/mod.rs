@@ -3,7 +3,7 @@ mod structs;
 
 use proc_macro2::TokenStream as TokenStream2;
 
-use crate::context::{CodegenEnv, ItemIr};
+use crate::context::internal::shared::{CodegenEnv, ItemIr};
 
 #[must_use]
 pub(crate) fn gen_memento_type(ir: &ItemIr, env: &CodegenEnv) -> TokenStream2 {

@@ -1,6 +1,6 @@
 //! # Recallable
 //!
-//! A crate for handling partial updates to data structures.
+//! A crate for memento-based recall on live data structures.
 //!
 //! This crate provides the [`Recallable`], [`Recall`], and [`TryRecall`] traits, along with
 //! derive macros for `Recallable` and `Recall`, and an attribute macro `recallable_model`
@@ -31,6 +31,8 @@ extern crate self as recallable;
 /// Adds `#[derive(Recallable, Recall)]` automatically. When the `serde` feature is enabled,
 /// also derives `serde::Serialize` on the struct and injects `#[serde(skip)]` on fields
 /// marked with `#[recallable(skip)]`.
+/// Complex enums with nested `#[recallable]` or `#[recallable(skip)]` fields should
+/// derive [`Recallable`] and implement [`Recall`] or [`TryRecall`] manually.
 ///
 /// Lifetime parameters are supported only when the generated memento can stay owned:
 /// non-skipped fields may not borrow one of the struct's lifetimes. Skipped borrowed
@@ -71,6 +73,8 @@ pub use recallable_macro::recallable_model;
 /// Supports enums by generating an enum-shaped memento with matching variants.
 /// For enums, `#[derive(Recall)]` and `#[recallable_model]` are available only
 /// when every variant field is assignment-only.
+/// Enums with nested `#[recallable]` or `#[recallable(skip)]` fields can still
+/// derive [`Recallable`] and provide manual [`Recall`] or [`TryRecall`] behavior.
 ///
 /// The memento struct mirrors the original but replaces `#[recallable]`-annotated fields
 /// with their `<FieldType as Recallable>::Memento` type and omits `#[recallable(skip)]` fields.
@@ -130,6 +134,8 @@ pub use recallable_macro::Recallable;
 /// Enums are supported only when every variant field is assignment-only.
 /// Enums with nested `#[recallable]` or skipped fields should derive
 /// [`Recallable`] and implement [`Recall`] or [`TryRecall`] manually.
+/// For supported enums, the derived implementation restores the target variant
+/// from the memento directly.
 ///
 /// Lifetime parameters are supported only when the generated memento can stay owned:
 /// non-skipped fields may not borrow one of the struct's lifetimes. Skipped borrowed

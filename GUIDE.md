@@ -160,7 +160,7 @@ Base dependency:
 
 ```toml
 [dependencies]
-recallable = "0.1.0"
+recallable = "0.2.0"
 ```
 
 MSRV is Rust 1.88 with edition 2024.
@@ -182,7 +182,7 @@ Example dependency sets:
 ```toml
 [dependencies]
 # Readable std example
-recallable = "0.1.0"
+recallable = "0.2.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ```
@@ -190,7 +190,7 @@ serde_json = "1"
 ```toml
 [dependencies]
 # no_std + serde example
-recallable = { version = "0.1.0", default-features = false, features = ["serde"] }
+recallable = { version = "0.2.0", default-features = false, features = ["serde"] }
 serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", default-features = false, features = ["heapless"] }
 heapless = { version = "0.9.2", default-features = false }
@@ -254,6 +254,12 @@ With the default `serde` feature enabled, it also injects:
 
 - `#[derive(serde::Serialize)]` on the source struct
 - `#[serde(skip)]` on fields marked `#[recallable(skip)]`
+
+Enum support is intentionally split:
+
+- assignment-only enums can use `#[recallable_model]` directly
+- enums with nested `#[recallable]` or `#[recallable(skip)]` fields should
+  derive `Recallable` and implement `Recall` or `TryRecall` manually
 
 Example:
 
@@ -355,6 +361,13 @@ Important distinction:
 
 - `#[recallable_model]` mutates source-side serde behavior for the common case
 - direct `#[derive(Recallable, Recall)]` does not
+
+Direct derives are also the split point for complex enums:
+
+- `#[derive(Recallable)]` supports enum-shaped mementos under the normal field rules
+- `#[derive(Recall)]` works only for assignment-only enums
+- enums with nested `#[recallable]` or skipped variant fields should derive
+  `Recallable` and implement `Recall` or `TryRecall` manually
 
 If you use direct derives and want the source struct to serialize in the same
 shape as the generated memento, you must add the serde derives and
@@ -476,7 +489,7 @@ the generated memento.
 
 ```toml
 [dependencies]
-recallable = { version = "0.1.0", features = ["impl_from"] }
+recallable = { version = "0.2.0", features = ["impl_from"] }
 ```
 
 ```rust
@@ -541,7 +554,7 @@ serde support by default:
 
 ```toml
 [dependencies]
-recallable = { version = "0.1.0", default-features = false }
+recallable = { version = "0.2.0", default-features = false }
 ```
 
 Then define the memento and recall behavior manually:
@@ -589,6 +602,8 @@ The derive macros support more than just simple named structs.
 - enums for `Recallable`
 - enums for `Recall` and `recallable_model` only when every variant field is
   assignment-only
+- complex enums should derive `Recallable` only and supply manual `Recall` or
+  `TryRecall`
 
 ### Supported generic forms
 
@@ -649,6 +664,8 @@ Behavior:
 - injects `Recallable` and `Recall`
 - injects `serde::Serialize` when the `serde` feature is enabled
 - injects `#[serde(skip)]` onto fields marked `#[recallable(skip)]`
+- rejects complex enums where generated `Recall` would be ambiguous; those
+  should derive `Recallable` and implement `Recall` or `TryRecall` manually
 
 ### `#[derive(Recallable)]`
 
@@ -657,6 +674,7 @@ Generates:
 - the companion memento type
 - the `Recallable` implementation
 - `From<Struct>` for the memento when `impl_from` is enabled
+- enum-shaped mementos for enums, even when `Recall` must stay manual
 
 ### `#[derive(Recall)]`
 
@@ -725,6 +743,8 @@ pub trait TryRecall: Recallable {
 - `#[derive(Recallable)]` supports enums under the normal field rules
 - `#[derive(Recall)]` and `#[recallable_model]` support enums only for
   assignment-only variants
+- complex enums should derive `Recallable` and implement `Recall` or
+  `TryRecall` manually
 - Borrowed non-skipped state fields are rejected
 - `#[recallable]` is path-only and does not accept tuple/reference/slice/function
   syntax directly

@@ -11,7 +11,7 @@ use crate::context::SERDE_ENABLED;
 use crate::context::internal::shared::bounds::MementoTraitSpec;
 use crate::context::internal::shared::fields::{FieldIr, FieldStrategy, collect_field_irs};
 use crate::context::internal::shared::generics::{
-    GenericParamPlan, GenericParamLookup, collect_marker_param_indices, is_generic_type_param,
+    GenericParamLookup, GenericParamPlan, collect_marker_param_indices, is_generic_type_param,
     marker_component, plan_memento_generics,
 };
 use crate::context::internal::shared::item::has_skip_memento_default_derives;

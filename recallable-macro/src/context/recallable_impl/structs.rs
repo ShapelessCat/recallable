@@ -2,7 +2,8 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::WherePredicate;
 
-use crate::context::{CodegenEnv, StructIr, collect_recall_like_bounds};
+use crate::context::internal::shared::CodegenEnv;
+use crate::context::internal::structs::{StructIr, collect_recall_like_bounds};
 
 #[must_use]
 pub(crate) fn gen_struct_recallable_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
