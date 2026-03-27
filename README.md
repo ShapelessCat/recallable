@@ -223,7 +223,10 @@ impl Recall for EngineState {
 
 ## Current Limitations
 
-- Derive macros currently support structs only: named, tuple, and unit structs
+- Derive macros support structs and enums
+- `#[derive(Recallable)]` supports enums under the normal field rules
+- `#[derive(Recall)]` and `#[recallable_model]` support enums only when every
+  variant field is assignment-only
 - Borrowed state fields are rejected unless they are skipped
 - `#[recallable]` is path-only: it supports type parameters, path types, and
   associated types, but not tuple/reference/slice/function syntax directly
