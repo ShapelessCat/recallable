@@ -2,10 +2,10 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, format_ident, quote};
 use syn::WherePredicate;
 
-use crate::context::{
-    CodegenEnv, EnumIr, FieldIr, FieldMember, FieldStrategy, VariantIr, VariantShape,
-    collect_shared_memento_bounds_for_enum,
+use crate::context::internal::enums::{
+    EnumIr, VariantIr, VariantShape, collect_shared_memento_bounds_for_enum,
 };
+use crate::context::internal::shared::{CodegenEnv, FieldIr, FieldMember, FieldStrategy};
 
 #[must_use]
 pub(crate) fn gen_enum_from_impl(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 {

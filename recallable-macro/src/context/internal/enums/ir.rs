@@ -10,7 +10,7 @@ use crate::context::SERDE_ENABLED;
 use crate::context::internal::shared::bounds::MementoTraitSpec;
 use crate::context::internal::shared::fields::{FieldIr, FieldStrategy, collect_field_irs};
 use crate::context::internal::shared::generics::{
-    GenericParamPlan, GenericParamLookup, collect_variant_marker_param_indices,
+    GenericParamLookup, GenericParamPlan, collect_variant_marker_param_indices,
     is_generic_type_param, marker_component, plan_memento_generics,
 };
 use crate::context::internal::shared::item::has_skip_memento_default_derives;
@@ -46,11 +46,10 @@ pub(crate) struct EnumIr<'a> {
     skip_memento_default_derives: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum EnumRecallMode {
-    AssignmentOnly,
-    ManualOnly,
-}
+const ENUM_RECALL_MANUAL_ONLY_ERROR: &str = "enum `Recall` derive requires assignment-only variant fields; derive `Recallable` and \
+     implement `Recall` or `TryRecall` manually";
+const ENUM_MODEL_MANUAL_ONLY_ERROR: &str = "`#[recallable_model]` on enums requires assignment-only variants; complex enums should \
+     derive `Recallable` and implement `Recall` or `TryRecall` manually";
 
 fn extract_enum_variants(
     input: &DeriveInput,
@@ -230,29 +229,33 @@ impl<'a> EnumIr<'a> {
         self.variants.iter()
     }
 
-    pub(crate) fn recall_mode(&self) -> EnumRecallMode {
-        if self
-            .variants
-            .iter()
-            .flat_map(|variant| variant.fields.iter())
-            .any(|field| !matches!(field.strategy, FieldStrategy::StoreAsSelf))
-        {
-            EnumRecallMode::ManualOnly
-        } else {
-            EnumRecallMode::AssignmentOnly
-        }
-    }
-
-    pub(crate) fn ensure_recall_derivable(&self) -> syn::Result<()> {
-        if let Some(field) = self
-            .variants
+    fn manual_only_field(&self) -> Option<&FieldIr<'a>> {
+        self.variants
             .iter()
             .flat_map(|variant| variant.fields.iter())
             .find(|field| !matches!(field.strategy, FieldStrategy::StoreAsSelf))
-        {
+    }
+
+    pub(crate) fn supports_derived_recall(&self) -> bool {
+        self.manual_only_field().is_none()
+    }
+
+    pub(crate) fn ensure_recall_derive_allowed(&self) -> syn::Result<()> {
+        if let Some(field) = self.manual_only_field() {
             return Err(syn::Error::new_spanned(
                 field.source,
-                "enum `Recall` derive only supports assignment-only variant fields",
+                ENUM_RECALL_MANUAL_ONLY_ERROR,
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn ensure_model_derive_allowed(&self) -> syn::Result<()> {
+        if self.manual_only_field().is_some() {
+            return Err(syn::Error::new_spanned(
+                self.name,
+                ENUM_MODEL_MANUAL_ONLY_ERROR,
             ));
         }
 

@@ -92,10 +92,16 @@ mod tests {
     fn phantom_data_detection_accepts_common_path_variants() {
         assert!(is_phantom_data(&parse_quote!(PhantomData<u8>)));
         assert!(is_phantom_data(&parse_quote!(marker::PhantomData<u8>)));
-        assert!(is_phantom_data(&parse_quote!(core::marker::PhantomData<u8>)));
-        assert!(is_phantom_data(&parse_quote!(::core::marker::PhantomData<u8>)));
+        assert!(is_phantom_data(&parse_quote!(
+            core::marker::PhantomData<u8>
+        )));
+        assert!(is_phantom_data(&parse_quote!(
+            ::core::marker::PhantomData<u8>
+        )));
         assert!(is_phantom_data(&parse_quote!(std::marker::PhantomData<u8>)));
-        assert!(is_phantom_data(&parse_quote!(::std::marker::PhantomData<u8>)));
+        assert!(is_phantom_data(&parse_quote!(
+            ::std::marker::PhantomData<u8>
+        )));
     }
 
     #[test]

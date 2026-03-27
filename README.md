@@ -25,9 +25,9 @@ input.
 - `Recall`: applies that memento infallibly
 - `TryRecall`: applies it fallibly with validation
 - `#[derive(Recallable)]`: generates the companion memento type
-- `#[derive(Recall)]`: generates recall logic
-- `#[recallable_model]`: convenience attribute for the common model path; with `serde` enabled it also removes extra
-  derive boilerplate
+- `#[derive(Recall)]`: generates recall logic for structs and assignment-only enums
+- `#[recallable_model]`: convenience attribute for the common struct or assignment-only enum path; with
+  `serde` enabled it also removes extra derive boilerplate
 
 The crate intentionally does not force one universal memento shape for
 container-like field types. A field type can choose whole-value replacement,
@@ -97,6 +97,12 @@ For `no_std + serde` deployments, prefer a `no_std`-compatible format such as
 - `#[derive(serde::Serialize)]` when the default `serde` feature is enabled
 - `#[serde(skip)]` for fields marked `#[recallable(skip)]`
 
+For enums, `#[recallable_model]` is intentionally narrower than `#[derive(Recallable)]`:
+
+- assignment-only enums are supported directly
+- enums with nested `#[recallable]` or `#[recallable(skip)]` fields should derive
+  `Recallable` and implement `Recall` or `TryRecall` manually
+
 ## Features
 
 - `serde` (default): enables macro-generated serde support; generated mementos derive
@@ -113,7 +119,7 @@ Example dependency sets:
 ```toml
 [dependencies]
 # Readable std example
-recallable = "0.1"
+recallable = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ```
@@ -121,7 +127,7 @@ serde_json = "1"
 ```toml
 [dependencies]
 # no_std + serde example
-recallable = { version = "0.1", default-features = false, features = ["serde"] }
+recallable = { version = "0.2", default-features = false, features = ["serde"] }
 serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", default-features = false, features = ["heapless"] }
 heapless = { version = "0.9.2", default-features = false }
@@ -130,7 +136,7 @@ heapless = { version = "0.9.2", default-features = false }
 ```toml
 [dependencies]
 # In-memory snapshots
-recallable = { version = "0.1", features = ["impl_from"] }
+recallable = { version = "0.2", features = ["impl_from"] }
 ```
 
 ## Two Common Workflows
@@ -183,7 +189,7 @@ default:
 
 ```toml
 [dependencies]
-recallable = { version = "0.1", default-features = false }
+recallable = { version = "0.2", default-features = false }
 ```
 
 Define the memento type and recall behavior manually:
@@ -227,6 +233,8 @@ impl Recall for EngineState {
 - `#[derive(Recallable)]` supports enums under the normal field rules
 - `#[derive(Recall)]` and `#[recallable_model]` support enums only when every
   variant field is assignment-only
+- Enums with nested `#[recallable]` or `#[recallable(skip)]` fields should
+  derive `Recallable` and implement `Recall` or `TryRecall` manually
 - Borrowed state fields are rejected unless they are skipped
 - `#[recallable]` is path-only: it supports type parameters, path types, and
   associated types, but not tuple/reference/slice/function syntax directly

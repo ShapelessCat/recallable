@@ -1,4 +1,4 @@
-error: `#[recallable_model]` on enums requires assignment-only variants because it injects `Recall`
+error: `#[recallable_model]` on enums requires assignment-only variants; complex enums should derive `Recallable` and implement `Recall` or `TryRecall` manually
  --> tests/ui/model_fail_enum_recallable_variant.rs:9:6
   |
 9 | enum InvalidModelNestedEnum {

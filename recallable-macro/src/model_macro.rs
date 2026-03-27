@@ -4,7 +4,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, quote};
 use syn::{Fields, Item, ItemEnum, ItemStruct, parse_quote};
 
-use crate::context::{self, EnumRecallMode, SERDE_ENABLED, crate_path, has_recallable_skip_attr};
+use crate::context::{self, SERDE_ENABLED, crate_path, has_recallable_skip_attr};
 
 enum ModelItem {
     Struct(ItemStruct),
@@ -60,21 +60,9 @@ pub(super) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
             Err(e) => return e.to_compile_error().into(),
         },
     };
-    let ir = match context::ItemIr::analyze(&derive_input) {
-        Ok(ir) => ir,
-        Err(e) => return e.to_compile_error().into(),
-    };
-    if let context::ItemIr::Enum(enum_ir) = &ir
-        && enum_ir.recall_mode() == EnumRecallMode::ManualOnly
-    {
-        return syn::Error::new_spanned(
-            &derive_input.ident,
-            "`#[recallable_model]` on enums requires assignment-only variants because it injects `Recall`",
-        )
-        .to_compile_error()
-        .into();
+    if let Err(e) = context::analyze_model_input(&derive_input) {
+        return e.to_compile_error().into();
     }
-
     if SERDE_ENABLED && let Err(e) = check_no_serialize_derive(model_item.attrs()) {
         return e.to_compile_error().into();
     }

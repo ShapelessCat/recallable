@@ -1,4 +1,4 @@
-error: enum `Recall` derive only supports assignment-only variant fields
+error: enum `Recall` derive requires assignment-only variant fields; derive `Recallable` and implement `Recall` or `TryRecall` manually
  --> tests/ui/derive_fail_enum_recall_skip.rs:6:9
   |
 6 | /         #[recallable(skip)]

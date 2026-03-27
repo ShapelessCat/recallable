@@ -3,10 +3,11 @@ use quote::quote;
 use std::collections::HashSet;
 use syn::{Ident, WhereClause, WherePredicate};
 
-use crate::context::{
-    CodegenEnv, FieldIr, FieldMember, FieldStrategy, SERDE_ENABLED, StructIr, StructShape,
-    collect_recall_like_bounds, is_generic_type_param,
+use crate::context::SERDE_ENABLED;
+use crate::context::internal::shared::{
+    CodegenEnv, FieldIr, FieldMember, FieldStrategy, is_generic_type_param,
 };
+use crate::context::internal::structs::{StructIr, StructShape, collect_recall_like_bounds};
 
 #[must_use]
 pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {

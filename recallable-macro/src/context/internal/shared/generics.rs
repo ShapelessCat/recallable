@@ -384,7 +384,7 @@ mod tests {
     use quote::{ToTokens, quote};
     use syn::parse_quote;
 
-    use crate::context::StructIr;
+    use crate::context::internal::structs::StructIr;
 
     #[test]
     fn memento_generics_preserve_retained_bounds_defaults_and_where_clauses() {

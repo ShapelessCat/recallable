@@ -2,9 +2,8 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::WherePredicate;
 
-use crate::context::{
-    CodegenEnv, FieldIr, FieldStrategy, StructIr, StructShape, collect_shared_memento_bounds,
-};
+use crate::context::internal::shared::{CodegenEnv, FieldIr, FieldStrategy};
+use crate::context::internal::structs::{StructIr, StructShape, collect_shared_memento_bounds};
 
 #[must_use]
 pub(crate) fn gen_struct_from_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
