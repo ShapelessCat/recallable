@@ -1,0 +1,5 @@
+error: Recall derives do not support borrowed fields
+ --> tests/ui/derive_fail_enum_borrowed_fields.rs:5:14
+  |
+5 |     Borrowed(&'a str),
+  |              ^^^^^^^

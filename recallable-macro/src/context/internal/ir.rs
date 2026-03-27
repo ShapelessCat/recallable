@@ -11,7 +11,9 @@ use crate::context::SERDE_ENABLED;
 
 use super::bounds::MementoTraitSpec;
 
-use super::fields::{collect_field_irs, collect_variant_irs, extract_struct_fields};
+use super::fields::{
+    collect_field_irs, collect_variant_irs, extract_enum_variants, extract_struct_fields,
+};
 use super::generics::{
     GenericParamPlan, collect_marker_param_indices, collect_variant_marker_param_indices,
     is_generic_type_param, marker_component, plan_memento_generics,
@@ -176,7 +178,10 @@ impl<'a> ItemIr<'a> {
     pub(crate) fn analyze(input: &'a DeriveInput) -> syn::Result<Self> {
         match &input.data {
             syn::Data::Struct(_) => Ok(Self::Struct(StructIr::analyze(input)?)),
-            syn::Data::Enum(data) => Ok(Self::Enum(EnumIr::analyze(input, &data.variants)?)),
+            syn::Data::Enum(_) => Ok(Self::Enum(EnumIr::analyze(
+                input,
+                extract_enum_variants(input)?,
+            )?)),
             _ => Err(syn::Error::new_spanned(
                 input,
                 "This derive macro can only be applied to structs or enums",
@@ -272,11 +277,6 @@ impl<'a> EnumIr<'a> {
 
     pub(crate) const fn memento_where_clause(&self) -> Option<&WhereClause> {
         self.memento_where_clause.as_ref()
-    }
-
-    #[must_use]
-    pub(crate) const fn has_synthetic_marker(&self) -> bool {
-        !self.marker_param_indices.is_empty()
     }
 
     #[must_use]

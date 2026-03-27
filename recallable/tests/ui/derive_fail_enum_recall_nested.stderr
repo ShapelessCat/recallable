@@ -1,0 +1,6 @@
+error: enum `Recall` derive only supports assignment-only variant fields
+  --> tests/ui/derive_fail_enum_recall_nested.rs:11:9
+   |
+11 | /         #[recallable]
+12 | |         inner: Inner,
+   | |____________________^
