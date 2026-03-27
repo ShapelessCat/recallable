@@ -44,6 +44,36 @@ mod tests {
     use super::{CodegenEnv, ItemIr, gen_memento_type};
 
     #[test]
+    fn split_internal_reexports_cover_both_item_kinds() {
+        use crate::context::internal::{enums::EnumIr, shared::CodegenEnv, structs::StructIr};
+        use syn::parse_quote;
+
+        let struct_input: syn::DeriveInput = parse_quote! {
+            struct Example<T> {
+                value: T,
+            }
+        };
+        let enum_input: syn::DeriveInput = parse_quote! {
+            enum Choice<T> {
+                One(T),
+            }
+        };
+
+        let struct_ir = StructIr::analyze(&struct_input).unwrap();
+        let enum_ir = EnumIr::analyze(&enum_input).unwrap();
+        let env = CodegenEnv::resolve();
+
+        assert_eq!(struct_ir.memento_name().to_string(), "ExampleMemento");
+        assert_eq!(enum_ir.memento_name().to_string(), "ChoiceMemento");
+        assert_eq!(
+            crate::context::memento::gen_memento_type(&crate::context::ItemIr::Struct(struct_ir), &env)
+                .to_string()
+                .contains("ExampleMemento"),
+            true
+        );
+    }
+
+    #[test]
     fn facade_reexports_support_analysis_and_codegen() {
         let input: syn::DeriveInput = parse_quote! {
             pub(crate) struct Example<T> {
