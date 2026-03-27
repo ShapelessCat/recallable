@@ -14,7 +14,7 @@ pub(crate) use bounds::{
 pub(crate) use fields::has_recallable_skip_attr;
 pub(crate) use generics::is_generic_type_param;
 pub(crate) use ir::{
-    CodegenEnv, EnumIr, FieldIr, FieldMember, FieldStrategy, ItemIr, StructIr, StructShape,
-    VariantIr, VariantShape,
+    CodegenEnv, EnumIr, EnumRecallMode, FieldIr, FieldMember, FieldStrategy, ItemIr, StructIr,
+    StructShape, VariantIr, VariantShape,
 };
 pub(crate) use util::crate_path;

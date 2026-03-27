@@ -1,8 +1,8 @@
 use recallable::Recallable;
 
 #[derive(Recallable)]
-enum NotAStruct {
-    Value(i32),
+union NotSupported {
+    value: u32,
 }
 
 fn main() {}

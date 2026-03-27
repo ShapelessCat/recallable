@@ -149,6 +149,12 @@ pub(crate) enum ItemIr<'a> {
     Enum(EnumIr<'a>),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum EnumRecallMode {
+    AssignmentOnly,
+    ManualOnly,
+}
+
 fn has_skip_memento_default_derives(input: &DeriveInput) -> syn::Result<bool> {
     let mut skip_memento_default_derives = false;
     for attr in input.attrs.iter().filter(|a| is_recallable_attr(a)) {
@@ -314,6 +320,35 @@ impl<'a> EnumIr<'a> {
 
     pub(crate) fn variants(&self) -> impl Iterator<Item = &VariantIr<'a>> {
         self.variants.iter()
+    }
+
+    pub(crate) fn recall_mode(&self) -> EnumRecallMode {
+        if self
+            .variants
+            .iter()
+            .flat_map(|variant| variant.fields.iter())
+            .any(|field| !matches!(field.strategy, FieldStrategy::StoreAsSelf))
+        {
+            EnumRecallMode::ManualOnly
+        } else {
+            EnumRecallMode::AssignmentOnly
+        }
+    }
+
+    pub(crate) fn ensure_recall_derivable(&self) -> syn::Result<()> {
+        if let Some(field) = self
+            .variants
+            .iter()
+            .flat_map(|variant| variant.fields.iter())
+            .find(|field| !matches!(field.strategy, FieldStrategy::StoreAsSelf))
+        {
+            return Err(syn::Error::new_spanned(
+                field.source,
+                "enum `Recall` derive only supports assignment-only variant fields",
+            ));
+        }
+
+        Ok(())
     }
 
     pub(super) fn recallable_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {

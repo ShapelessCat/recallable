@@ -127,10 +127,15 @@ pub fn derive_recallable(input: TokenStream) -> TokenStream {
 /// `Recall` implementation.
 pub fn derive_recall(input: TokenStream) -> TokenStream {
     let input: DeriveInput = parse_macro_input!(input as DeriveInput);
-    let ir = match context::StructIr::analyze(&input) {
+    let ir = match context::ItemIr::analyze(&input) {
         Ok(ir) => ir,
         Err(e) => return e.to_compile_error().into(),
     };
+    if let context::ItemIr::Enum(enum_ir) = &ir
+        && let Err(e) = enum_ir.ensure_recall_derivable()
+    {
+        return e.to_compile_error().into();
+    }
     let env = context::CodegenEnv::resolve();
 
     let recall_impl = context::gen_recall_impl(&ir, &env);
