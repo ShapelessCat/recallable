@@ -26,7 +26,7 @@
 
 extern crate self as recallable;
 
-/// Attribute macro that prepares a struct for the Memento pattern.
+/// Attribute macro that prepares a struct or assignment-only enum for the Memento pattern.
 ///
 /// Adds `#[derive(Recallable, Recall)]` automatically. When the `serde` feature is enabled,
 /// also derives `serde::Serialize` on the struct and injects `#[serde(skip)]` on fields
@@ -65,7 +65,12 @@ extern crate self as recallable;
 /// ```
 pub use recallable_macro::recallable_model;
 
-/// Derive macro that generates a companion memento struct and the [`Recallable`] trait impl.
+/// Derive macro that generates a companion memento type and the [`Recallable`] trait impl.
+///
+/// Supports structs directly.
+/// Supports enums by generating an enum-shaped memento with matching variants.
+/// For enums, `#[derive(Recall)]` and `#[recallable_model]` are available only
+/// when every variant field is assignment-only.
 ///
 /// The memento struct mirrors the original but replaces `#[recallable]`-annotated fields
 /// with their `<FieldType as Recallable>::Memento` type and omits `#[recallable(skip)]` fields.
@@ -122,6 +127,9 @@ pub use recallable_macro::Recallable;
 /// Fields marked `#[recallable(skip)]` are left untouched.
 /// For `#[recallable]` fields, replace/merge behavior comes from the field type's own
 /// [`Recall`] implementation.
+/// Enums are supported only when every variant field is assignment-only.
+/// Enums with nested `#[recallable]` or skipped fields should derive
+/// [`Recallable`] and implement [`Recall`] or [`TryRecall`] manually.
 ///
 /// Lifetime parameters are supported only when the generated memento can stay owned:
 /// non-skipped fields may not borrow one of the struct's lifetimes. Skipped borrowed

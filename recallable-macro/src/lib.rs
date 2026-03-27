@@ -4,16 +4,18 @@
 //!
 //! Provided macros:
 //!
-//! - `#[recallable_model]`: injects `Recallable`/`Recall` derives; with the `serde`
-//!   Cargo feature enabled for this macro crate it also adds `serde::Serialize`
-//!   and applies `#[serde(skip)]` to fields marked `#[recallable(skip)]`.
+//! - `#[recallable_model]`: injects `Recallable`/`Recall` derives for structs and
+//!   assignment-only enums; with the `serde` Cargo feature enabled for this macro
+//!   crate it also adds `serde::Serialize` and applies `#[serde(skip)]` to fields
+//!   marked `#[recallable(skip)]`.
 //!
-//! - `#[derive(Recallable)]`: generates an internal companion memento struct, exposes
-//!   it as `<Struct as Recallable>::Memento`, and emits the `Recallable` impl; with the
-//!   `impl_from` Cargo feature it also generates `From<Struct>` for the memento type.
+//! - `#[derive(Recallable)]`: generates an internal companion memento type, exposes
+//!   it as `<Type as Recallable>::Memento`, and emits the `Recallable` impl; with the
+//!   `impl_from` Cargo feature it also generates `From<Type>` for the memento type.
 //!
-//! - `#[derive(Recall)]`: generates the `Recall` implementation and recursively
-//!   recalls fields annotated with `#[recallable]`.
+//! - `#[derive(Recall)]`: generates the `Recall` implementation, recursively
+//!   recalls struct fields annotated with `#[recallable]`, and supports enums only
+//!   when every variant field is assignment-only.
 //!
 //! Feature flags are evaluated in the `recallable-macro` crate itself. See `context`
 //! for details about the generated memento struct and trait implementations.
@@ -26,7 +28,8 @@ use syn::{DeriveInput, parse_macro_input};
 mod context;
 mod model_macro;
 
-/// Attribute macro that augments a struct with `Recallable`/`Recall` derives.
+/// Attribute macro that augments a struct or assignment-only enum with
+/// `Recallable`/`Recall` derives.
 ///
 /// - Always adds `#[derive(Recallable, Recall)]`.
 /// - When the `serde` feature is enabled for the macro crate, it also adds
@@ -48,6 +51,11 @@ pub fn recallable_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Derive macro that generates the companion memento type and `Recallable` impl.
 ///
+/// Supports structs directly.
+/// Supports enums by generating an enum-shaped memento with matching variants.
+/// For enums, `#[derive(Recall)]` and `#[recallable_model]` are available only
+/// when every variant field is assignment-only.
+///
 /// The generated memento type:
 /// - mirrors the original struct shape (named/tuple/unit),
 /// - includes fields unless marked with `#[recallable(skip)]`,
@@ -60,9 +68,9 @@ pub fn recallable_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// `<FieldType as Recallable>::Memento`. The macro does not prescribe one canonical container
 /// semantics; it uses whatever memento shape the field type defines.
 ///
-/// The companion struct itself is generated as an internal implementation detail. The supported
-/// way to name it is `<Struct as Recallable>::Memento`. It is intended to be produced and consumed
-/// alongside the source struct, primarily through `Recall::recall`/`TryRecall::try_recall`, not as
+/// The companion type itself is generated as an internal implementation detail. The supported
+/// way to name it is `<Type as Recallable>::Memento`. It is intended to be produced and consumed
+/// alongside the source item, primarily through `Recall::recall`/`TryRecall::try_recall`, not as
 /// a field-inspection surface with widened visibility.
 ///
 /// The `Recallable` impl sets `type Memento` to that generated type and adds any required generic
@@ -78,7 +86,7 @@ pub fn recallable_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// still derived on the memento even with this attribute.
 ///
 /// When the `impl_from` feature is enabled for the macro crate, a
-/// `From<Struct>` implementation is also generated for the memento type. For `#[recallable]`
+/// `From<Type>` implementation is also generated for the memento type. For `#[recallable]`
 /// fields, that additionally requires `<FieldType as Recallable>::Memento: From<FieldType>`.
 #[proc_macro_derive(Recallable, attributes(recallable))]
 pub fn derive_recallable(input: TokenStream) -> TokenStream {
@@ -125,6 +133,7 @@ pub fn derive_recallable(input: TokenStream) -> TokenStream {
 ///
 /// For `#[recallable]` fields, replace/merge behavior comes from the field type's own
 /// `Recall` implementation.
+/// Enums are supported only when every variant field is assignment-only.
 pub fn derive_recall(input: TokenStream) -> TokenStream {
     let input: DeriveInput = parse_macro_input!(input as DeriveInput);
     let ir = match context::ItemIr::analyze(&input) {

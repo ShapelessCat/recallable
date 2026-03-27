@@ -581,11 +581,14 @@ This manual style pairs naturally with:
 
 The derive macros support more than just simple named structs.
 
-### Supported struct shapes
+### Supported item shapes
 
 - named structs
 - tuple structs
 - unit structs
+- enums for `Recallable`
+- enums for `Recall` and `recallable_model` only when every variant field is
+  assignment-only
 
 ### Supported generic forms
 
@@ -637,7 +640,7 @@ write-side output format by default.
 
 ### `#[recallable_model]`
 
-Convenience attribute for the common struct model path.
+Convenience attribute for the common struct or assignment-only enum model path.
 It is the recommended default whether or not `serde` is enabled; with `serde`
 enabled it also removes extra derive boilerplate.
 
@@ -661,9 +664,10 @@ Generates the `Recall` implementation.
 
 Behavior:
 
-- plain fields are assigned directly
-- `#[recallable]` fields call nested `recall`
-- `#[recallable(skip)]` fields are left untouched
+- struct fields are handled as before
+- enum derives are supported only for assignment-only variants
+- enums with nested `#[recallable]` or skipped fields should derive
+  `Recallable` and implement `Recall` or `TryRecall` manually
 
 ### `#[recallable]`
 
@@ -718,7 +722,9 @@ pub trait TryRecall: Recallable {
 
 ## Current limitations
 
-- Derive macros currently support structs only; enum support is not implemented
+- `#[derive(Recallable)]` supports enums under the normal field rules
+- `#[derive(Recall)]` and `#[recallable_model]` support enums only for
+  assignment-only variants
 - Borrowed non-skipped state fields are rejected
 - `#[recallable]` is path-only and does not accept tuple/reference/slice/function
   syntax directly
