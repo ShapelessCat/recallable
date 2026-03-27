@@ -1,0 +1,5 @@
+error: `#[recallable_model]` on enums requires assignment-only variants because it injects `Recall`
+ --> tests/ui/model_fail_enum_skip_variant.rs:4:6
+  |
+4 | enum InvalidModelSkippedEnum {
+  |      ^^^^^^^^^^^^^^^^^^^^^^^
