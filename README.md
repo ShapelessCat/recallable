@@ -3,111 +3,235 @@
 [![CI](https://github.com/ShapelessCat/recallable/actions/workflows/ci.yaml/badge.svg)](https://github.com/ShapelessCat/recallable/actions/workflows/ci.yaml)
 [![Crates.io](https://img.shields.io/crates/v/recallable.svg)](https://crates.io/crates/recallable)
 [![Documentation](https://docs.rs/recallable/badge.svg)](https://docs.rs/recallable)
-[![recallable MSRV](https://img.shields.io/crates/msrv/recallable.svg?label=recallable%20msrv&color=lightgray)](https://blog.rust-lang.org/2025/06/26/Rust-1.88.0.html)
-[![recallable-macro MSRV](https://img.shields.io/crates/msrv/recallable-macro.svg?label=recallable-macro%20msrv&color=lightgray)](https://blog.rust-lang.org/2025/06/26/Rust-1.88.0.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-Traits (`Recallable`, `Recall`, `TryRecall`) and procedural macros for defining Memento pattern types and their state
-restoration behaviors.
+`recallable` is a `no_std`-friendly crate for Memento-pattern state recovery in Rust.
+It gives a type a companion memento type and a way to apply that memento to an
+already initialized value.
 
-Implementing `Recallable` for a struct means specifying its associated memento type. Its subtraits `Recall` and
-`TryRecall` provide the interface for applying state restoration infallibly and fallibly, respectively. The blanket
-`TryRecall` implementation for all `Recall` types mirrors the `From`/`TryFrom` relationship in the standard library, so
-infallible types work seamlessly in fallible contexts.
+This is useful when your runtime struct contains a mix of:
 
-Note:
-Each `Recallable` implementation chooses one associated memento type. For container-like types,
-different implementations may reasonably choose different memento shapes and recall behavior.
+- durable state that should be restored or updated
+- runtime-only fields that must stay alive across recall
 
-## Why Recallable?
+Typical examples are caches, handles, closures, connection ids, metrics state,
+or other non-persisted fields that should not be reconstructed from serialized
+input.
 
-Recallable shines when you need to persist and update state without hand-maintaining parallel state structs. A common
-use case is durable execution: save only true state while skipping non-state fields (caches, handles, closures), then
-restore or update state incrementally.
+## What It Provides
 
-Typical scenarios include:
+- `Recallable`: declares a companion `Memento` type
+- `Recall`: applies that memento infallibly
+- `TryRecall`: applies it fallibly with validation
+- `#[derive(Recallable)]`: generates the companion memento type
+- `#[derive(Recall)]`: generates recall logic
+- `#[recallable_model]`: convenience attribute for the common model path; with `serde` enabled it also removes extra
+  derive boilerplate
 
-- Durable or event-sourced systems where only state fields should be persisted.
-- Streaming or real-time pipelines that receive incremental updates.
-- Syncing or transporting partial state over the network.
+The crate intentionally does not force one universal memento shape for
+container-like field types. A field type can choose whole-value replacement,
+selective inner updates, zipped updates, or any other domain-specific behavior
+through its own `Recallable::Memento` and `Recall::recall` implementations.
 
-The provided procedural macros handle the heavy lifting; they generate companion memento types and recall logic. See
-[Features](#features) and [How It Works](#how-it-works) for details.
+## Why Not Just Deserialize?
 
-## Design Philosophy
+Normal `Deserialize` constructs a brand-new value.
+That is awkward when you already have a live runtime object with fields that
+should survive updates unchanged.
 
-This crate makes deliberate choices to encourage correct usage of the Memento pattern:
+`Recallable` lets you deserialize or construct a memento and apply it to an
+existing value instead:
 
-- **No `#[derive(TryRecall)]`:** `TryRecall` exists precisely for custom, fallible validation logic. Because this domain-specific validation is unpredictable, auto-generating it would encourage bypassing the very checks the pattern is meant to enforce. You should implement it manually.
-- **Strict Memento Encapsulation:** Generated mementos have the same visibility as their parent structs, but their *fields* are always private. Mementos are opaque state tokens meant to be created and applied via `Recall` or `TryRecall`. Exposing their fields would encourage reaching into them, breaking the abstraction.
+- durable state changes
+- skipped runtime fields stay untouched
+- nested `#[recallable]` fields use their own recall behavior
 
-## Table of Contents
+## Quickstart
 
-- [Design Philosophy](#design-philosophy)
-- [Features](#features)
-- [Installation](#installation)
-- [Runnable Examples](#runnable-examples)
-- [Requirements & Limitations](#requirements--limitations)
-- [Usage](#usage)
-  - [Basic Example](#basic-example)
-  - [Using `#[recallable_model]`](#using-recallable_model)
-  - [Skipping Fields](#skipping-fields)
-  - [Nested Recallable Structs](#nested-recallable-structs)
-  - [Fallible Recalling](#fallible-recalling)
-- [How It Works](#how-it-works)
-  - [Generated Code](#generated-code)
-- [API Reference](#api-reference)
-- [Contributing](#contributing)
-- [License](#license)
+With the default `serde` feature, the easiest path is `#[recallable_model]`.
+
+```toml
+[dependencies]
+recallable = "0.1"
+serde_json = "1"
+```
+
+```rust
+use recallable::{Recall, Recallable, recallable_model};
+
+#[recallable_model]
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct DashboardState {
+    volume: u8,
+    label: String,
+    #[recallable(skip)]
+    cache_key: String,
+}
+
+fn main() {
+    let mut dashboard = DashboardState {
+        volume: 10,
+        label: "draft".to_string(),
+        cache_key: "keep-me".to_string(),
+    };
+
+    let memento: <DashboardState as Recallable>::Memento =
+        serde_json::from_str(r#"{"volume":75,"label":"live"}"#).unwrap();
+
+    dashboard.recall(memento);
+
+    assert_eq!(dashboard.volume, 75);
+    assert_eq!(dashboard.label, "live");
+    assert_eq!(dashboard.cache_key, "keep-me");
+}
+```
+
+`serde_json` is used here because it is easy to read in documentation.
+For `no_std + serde` deployments, prefer a `no_std`-compatible format such as
+`postcard`.
+
+`#[recallable_model]` injects:
+
+- `#[derive(Recallable, Recall)]`
+- `#[derive(serde::Serialize)]` when the default `serde` feature is enabled
+- `#[serde(skip)]` for fields marked `#[recallable(skip)]`
 
 ## Features
 
-- **`#[recallable_model]` Attribute Macro**: Injects `#[derive(Recallable, Recall)]` and, with the default `serde`
-  feature, `#[derive(serde::Serialize)]` plus `#[serde(skip)]` on fields marked `#[recallable(skip)]`
-- **Automatic Memento Type Generation**: Derives a companion memento type for any struct annotated with
-  `#[derive(Recallable)]`, exposed as `<Type as Recallable>::Memento`. The generated type is kept out of your namespace,
-  preventing pollution and allowing internal naming to evolve without breaking downstream code
-- **Recursive Recalling**: Use the `#[recallable]` attribute to mark fields that require recursive recalling
-- **Smart Exclusion**: Excludes fields marked with `#[recallable(skip)]`
-- **Serde Integration (optional, default)**: Generated memento types automatically implement `serde::Deserialize`
-  but not `Serialize` — mementos are meant to be received and applied, not sent back out. This asymmetry aligns with
-  typical durable-execution and incremental-update use cases. Exclude the `serde` feature to opt out
-- **Generic Support**: Supports type and const generics, preserves retained bounds/defaults and relevant `where`
-  predicates on generated mementos, and infers trait bounds for bare `T` `#[recallable]` fields
-- **Optional `From` Derive**: Enable `From<Struct>` for `<Struct as Recallable>::Memento` with the `impl_from`
-  feature. For `#[recallable]` fields, this also requires the field's memento type to implement
-  `From<FieldType>`
-- **Zero Runtime Overhead**: All code generation happens at compile time
-- **`no_std` Support**: Compatible with `no_std` environments (for example, with `postcard` + `heapless`)
+- `serde` (default): enables macro-generated serde support; generated mementos derive
+  `serde::Deserialize`, and `#[recallable_model]` also adds the source-side serde behavior
+  described above. This feature remains compatible with `no_std` as long as your serde stack is
+  configured for `no_std`.
+- `impl_from`: generates `From<Struct>` for `<Struct as Recallable>::Memento`
+- `full`: convenience feature for `serde` + `impl_from`
+- `default-features = false`: disables recallable's default serde integration. It is useful for
+  non-serde setups, but it is not what makes `no_std` possible.
 
-## Installation
-
-**MSRV:** Rust 1.88 (edition 2024). CI validates both the current stable toolchain and Rust 1.88.0.
-
-Add this to your `Cargo.toml`:
+Example dependency sets:
 
 ```toml
 [dependencies]
-recallable = "0.1.0" # Please use the latest version
-```
-
-Check this project's Cargo feature flags to see what you want to enable or disable.
-
-The examples in this README also use `serde`, `postcard`, and `heapless`. Add them as dependencies if you want to run
-the examples:
-
-```toml
-[dependencies]
+# Readable std example
+recallable = "0.1"
 serde = { version = "1", features = ["derive"] }
-postcard = "1"
-heapless = "0.9.2"
+serde_json = "1"
 ```
 
-## Runnable Examples
+```toml
+[dependencies]
+# no_std + serde example
+recallable = { version = "0.1", default-features = false, features = ["serde"] }
+serde = { version = "1", default-features = false, features = ["derive"] }
+postcard = { version = "1", default-features = false, features = ["heapless"] }
+heapless = { version = "0.9.2", default-features = false }
+```
 
-The repository includes runnable example binaries under `recallable/examples/`.
-Because the workspace root uses a virtual manifest, run them with `-p recallable`:
+```toml
+[dependencies]
+# In-memory snapshots
+recallable = { version = "0.1", features = ["impl_from"] }
+```
+
+## Two Common Workflows
+
+### Persistence and restore
+
+This is the default path when state crosses process boundaries or is written to
+disk. It works in both `std` and `no_std` environments; only the serialization
+format and serde configuration differ.
+
+1. Serialize the source struct.
+2. Deserialize into `<Type as Recallable>::Memento`.
+3. Apply the memento with `recall` or `try_recall`.
+
+This flow is especially convenient with `#[recallable_model]`, because the
+source struct's serialized shape already matches the generated memento shape.
+
+### In-memory snapshots
+
+Enable `impl_from` when you want an owned memento inside the same process for
+checkpoint/rollback, undo stacks, or test fixtures.
+
+```rust
+use recallable::{Recall, Recallable, recallable_model};
+
+#[recallable_model]
+#[derive(Clone, Debug, PartialEq)]
+struct Counter {
+    value: i32,
+}
+
+fn main() {
+    let original = Counter { value: 42 };
+    let memento: <Counter as Recallable>::Memento = original.clone().into();
+
+    let mut target = Counter { value: 0 };
+    target.recall(memento);
+
+    assert_eq!(target, original);
+}
+```
+
+## Manual trait implementations
+
+You do not need the macros to use the traits.
+Manual implementations work whether or not serde is enabled.
+
+Disable default features only when you want recallable itself to stop enabling serde support by
+default:
+
+```toml
+[dependencies]
+recallable = { version = "0.1", default-features = false }
+```
+
+Define the memento type and recall behavior manually:
+
+```rust
+use recallable::{Recall, Recallable};
+
+struct EngineState {
+    applied_ticks: u64,
+    cached_checksum: u64,
+}
+
+struct EngineMemento {
+    applied_ticks: u64,
+}
+
+impl Recallable for EngineState {
+    type Memento = EngineMemento;
+}
+
+impl Recall for EngineState {
+    fn recall(&mut self, memento: Self::Memento) {
+        self.applied_ticks = memento.applied_ticks;
+    }
+}
+```
+
+## Important Notes
+
+- `#[recallable_model]` must appear before the attributes it needs to inspect.
+- Direct `#[derive(Recallable, Recall)]` does not modify source serde behavior.
+  If you need `Serialize` or `#[serde(skip)]`, add them yourself.
+- There is intentionally no `#[derive(TryRecall)]`; fallible recall is where
+  application-specific validation belongs.
+- Generated mementos are meant to be named through `<Type as Recallable>::Memento`.
+- Generated memento fields remain private.
+
+## Current Limitations
+
+- Derive macros currently support structs only: named, tuple, and unit structs
+- Borrowed state fields are rejected unless they are skipped
+- `#[recallable]` is path-only: it supports type parameters, path types, and
+  associated types, but not tuple/reference/slice/function syntax directly
+- Serde attributes are not forwarded to the generated memento
+
+## Examples
+
+Runnable examples live under `recallable/examples/`:
 
 ```bash
 cargo run -p recallable --example basic_model
@@ -117,427 +241,14 @@ cargo run -p recallable --no-default-features --example manual_no_serde
 cargo run -p recallable --no-default-features --features impl_from --example impl_from_roundtrip
 ```
 
-## Requirements & Limitations
-
-Before diving into the examples, be aware of the following constraints:
-
-- **Structs only** — enums and unions are not supported.
-- **Lifetime parameters are allowed only when the generated memento can stay owned** — structs may have lifetime
-  parameters, but any non-skipped field that borrows one of the struct's lifetimes (for example `&'a str` or
-  `Vec<&'a u8>`) is rejected. Skipped borrowed fields and lifetime-only markers such as `PhantomData<&'a T>` are
-  supported because they do not need to appear in the generated memento.
-- **`#[recallable]` is limited to path types** — bare type parameters (`T`), parameterized paths like `Option<T>` and
-  `HashMap<K, V>`, module-qualified paths, associated types like `T::Assoc`, and qualified associated types like
-  `<T as Trait>::Assoc` are supported. Non-path types such as tuples, arrays, references, slices, and function types
-  are still rejected.
-- **Implicit trait requirements on field types** — the generated memento struct derives `Clone`, `Debug`, and
-  `PartialEq` (and `Deserialize` when the `serde` feature is enabled). For regular fields, the field type itself must
-  implement these traits. For `#[recallable]` fields, it is the field's *memento type*
-  (`<FieldType as Recallable>::Memento`) that must implement them. If any required trait is missing, compilation fails
-  with an error pointing at generated code.
-- **`impl_from` adds nested `From` requirements** — when the `impl_from` feature is enabled, the derived
-  `From<Struct>` implementation converts each `#[recallable]` field with `Into`, so
-  `<FieldType as Recallable>::Memento` must implement `From<FieldType>`. Some otherwise valid generic container
-  designs cannot satisfy this because of Rust coherence rules.
-- **`#[recallable_model]` attribute ordering** — `#[recallable_model]` must appear *before* any attributes it needs
-  to inspect (e.g., before `#[derive(Serialize)]`). Attribute macros only see attributes that follow them in source
-  order.
-- **Serde behavior** — with the default `serde` feature:
-  - `#[recallable_model]` injects `#[derive(serde::Serialize)]` and adds `#[serde(skip)]` to `#[recallable(skip)]`
-    fields. Adding a manual `#[derive(Serialize)]` is a compile error.
-  - Direct `#[derive(Recallable, Recall)]` does **not** inject `serde::Serialize` or add `#[serde(skip)]` to skipped
-    fields on the source struct. If you want serialization to match recalling behavior when using direct derives, add
-    those serde attributes yourself.
-  - `#[derive(Recallable)]` makes the memento derive `Deserialize` but not `Serialize`
-    (see [Serde Integration](#features) above for the rationale).
-  - Serde attributes like `#[serde(rename = "...")]` on the original struct are not forwarded to the memento struct.
-    The generated memento mirrors the original struct's field layout by design — the macro intentionally keeps
-    generation simple rather than adding complex attribute forwarding. For use cases requiring custom serde attributes
-    on the memento, implement `Recallable` and define the memento struct manually.
-
-## Usage
-
-### Basic Example
-
-```rust
-use recallable::{Recall, Recallable};
-use serde::{Deserialize, Serialize};
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Recallable, Recall)]
-struct User {
-    id: u64,
-    name: String,
-    email: String,
-}
-
-fn main() {
-    let mut user = User {
-        id: 1,
-        name: "Alice".to_string(),
-        email: "alice@example.com".to_string(),
-    };
-
-    // Serialize the current state
-    let state_bytes = postcard::to_vec::<_, 128>(&user).unwrap();
-
-    // Deserialize into a memento
-    let memento: <User as Recallable>::Memento = postcard::from_bytes(&state_bytes).unwrap();
-
-    let mut default = User::default();
-    // Apply the memento
-    default.recall(memento);
-
-    assert_eq!(default, user);
-}
-```
-
-### Using `#[recallable_model]`
-
-The simplest way to use this library is the attribute macro:
-
-```rust
-use recallable::recallable_model;
-
-#[recallable_model]
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-struct User {
-    id: u64,
-    name: String,
-    #[recallable(skip)]
-    cache_key: String,
-}
-```
-
-`#[recallable_model]` always adds `Recallable` and `Recall` derives. With the default
-`serde` feature enabled, it also adds `serde::Serialize` and injects `#[serde(skip)]`
-for fields marked `#[recallable(skip)]`.
-Add any other derives you need (for example, `Deserialize`) alongside it.
-
-**Note:** `#[recallable_model]` must appear before other derive/attribute macros it needs
-to interact with. See [Requirements & Limitations](#requirements--limitations) for details.
-
-### Skipping Fields
-
-Fields can be excluded from recalling using `#[recallable(skip)]`:
-
-```rust
-use recallable::recallable_model;
-use serde::Deserialize;
-
-#[recallable_model]
-#[derive(Clone, Debug, Deserialize)]
-struct Measurement<T, F> {
-    value: T,
-    #[recallable(skip)]
-    compute_fn: F,
-}
-```
-
-Fields marked with `#[recallable(skip)]` are excluded from the generated memento type. The generated companion struct is
-an implementation detail; the supported way to refer to it is `<Type as Recallable>::Memento`. If you use
-`#[recallable_model]` with the default `serde` feature enabled, those fields also receive `#[serde(skip)]` so serialized
-state and mementos stay aligned. If you derive `Recallable`/`Recall` directly, add `#[serde(skip)]` yourself when you
-want serialization to match recalling behavior.
-
-### Nested Recallable Structs
-
-The macros support retained type and const generics on both the source type and generated memento:
-
-```rust
-use recallable::{Recall, Recallable};
-use serde::Serialize;
-
-#[derive(Clone, Debug, Serialize, Recallable, Recall)]
-struct Container<Closure> {
-    #[serde(skip)]
-    #[recallable(skip)]
-    computation_logic: Closure, // Not a part of state
-    metadata: String,
-}
-
-#[derive(Clone, Debug, Serialize, Recallable, Recall)]
-struct Wrapper<T, Closure, const N: usize> {
-    data: T,
-    #[recallable]
-    inner: ConstContainer<Closure, N>,
-}
-
-#[derive(Clone, Debug, Serialize, Recallable, Recall)]
-struct ConstContainer<Closure, const N: usize> {
-    #[serde(skip)]
-    #[recallable(skip)]
-    computation_logic: Closure,
-    version: u32,
-}
-```
-
-The macros automatically:
-
-- Use whatever `Recallable::Memento` and `Recall::recall` implementation each `#[recallable]` field type provides.
-  For container-like field types, this means the macro does not prescribe one canonical merge strategy: a field type
-  may replace itself wholesale, selectively update inner values, or apply some other domain-specific behavior.
-- Preserve only the generic parameters used by non-skipped fields, plus any dependencies pulled in by retained bounds,
-  defaults, or relevant `where` predicates
-- Keep retained bounds/defaults and filtered `where` clauses on the generated memento
-- Add appropriate trait bounds (`Recallable`, `Recall`) based on field usage
-- Generate correctly parameterized memento types
-
-### Fallible Recalling
-
-The `TryRecall` trait allows for fallible updates, which is useful when memento application requires validation:
-
-```rust
-use recallable::{TryRecall, Recallable};
-use core::fmt;
-
-struct Config {
-    limit: u32,
-}
-
-#[derive(Clone)]
-struct ConfigMemento {
-    limit: u32,
-}
-
-#[derive(Debug)]
-struct InvalidConfigError;
-
-impl fmt::Display for InvalidConfigError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "limit cannot be zero")
-    }
-}
-
-impl core::error::Error for InvalidConfigError {}
-
-impl Recallable for Config {
-    type Memento = ConfigMemento;
-}
-
-impl TryRecall for Config {
-    type Error = InvalidConfigError;
-
-    fn try_recall(&mut self, memento: Self::Memento) -> Result<(), Self::Error> {
-        if memento.limit == 0 {
-            return Err(InvalidConfigError);
-        }
-        self.limit = memento.limit;
-        Ok(())
-    }
-}
-```
-
-## How It Works
-
-When you derive `Recallable` on a struct, for instance, `Struct`:
-
-1. **Companion Memento Type**: The macro generates an internal companion memento struct and exposes
-   it as `<Struct as Recallable>::Memento`. That type mirrors the original structure but only
-   includes fields that are part of the memento. Here are the rules:
-   - Each field marked with `#[recallable]` in `Struct` is typed with
-     `<FieldType as Recallable>::Memento` in the generated companion type. The macro does not
-     special-case container types; it uses whatever memento shape the field type defines.
-   - Fields marked with `#[recallable(skip)]` are excluded.
-   - The left fields are copied directly with their original types.
-   - The generated memento type uses the same visibility as `Struct`, but its fields are always
-     generated without visibility modifiers and therefore remain private to the containing module.
-     This is intentional: mementos are expected to be created and consumed alongside the companion
-     struct, primarily through `Recall::recall` and `TryRecall::try_recall`, not as a public
-     field-inspection surface.
-
-2. **Trait Implementation**: The macro implements `Recallable` for `Struct` and sets
-   `type Memento` to that generated companion type (see the API reference for the exact trait
-   definition).
-
-3. **Serialized State to Recall**: If you serialize a `Struct` instance, that serialized value can
-   be deserialized into `<Struct as Recallable>::Memento`, which yields a memento representing the
-   serialized state.
-
-When you derive `Recall` on a struct:
-
-1. **Recall Method**: The `recall` method updates the struct:
-   - Regular fields are directly assigned from the memento
-   - `#[recallable]` fields are recursively recalled via their own `recall` method, so field-level
-     replace/merge behavior comes from the field type's implementation
-
-2. **Trait Implementation**: The macro generates `Recall` implementation for the target struct (see
-API reference for the exact trait definitions).
-
-### Generated Code
-
-To see exactly what the macros produce, run `cargo expand` on an example. Here is a
-simplified view of the output for a basic struct (serde `Deserialize` expansion omitted
-for clarity):
-
-```rust
-// Source:
-//
-// #[recallable_model]
-// #[derive(Clone, Debug, PartialEq)]
-// struct DashboardState {
-//     volume: u8,
-//     label: String,
-//     #[recallable(skip)]
-//     cache_key: String,
-// }
-
-// What #[recallable_model] injects:
-// - #[derive(Recallable, Recall)] on the struct
-// - #[derive(serde::Serialize)] on the struct (with serde feature)
-// - #[serde(skip)] on #[recallable(skip)] fields
-
-// Generated inside a `const _: () = { ... }` block:
-
-#[automatically_derived]
-struct DashboardStateMemento {
-    volume: u8,
-    label: String,
-}
-// Also derives: Clone, Debug, PartialEq, Deserialize (with serde feature)
-
-#[automatically_derived]
-impl Recallable for DashboardState {
-    type Memento = DashboardStateMemento;
-}
-
-#[automatically_derived]
-impl Recall for DashboardState {
-    #[inline]
-    fn recall(&mut self, memento: DashboardStateMemento) {
-        self.volume = memento.volume;
-        self.label = memento.label;
-        // cache_key is skipped — its value is preserved
-    }
-}
-```
-
-Run `cargo expand --package recallable --example basic_model` to see the full unabridged
-output, including serde's `Deserialize` implementation.
-
-## API Reference
-
-### `#[recallable_model]`
-
-Attribute macro that injects `Recallable` and `Recall` derives for a struct.
-
-**Behavior:**
-
-- Adds `#[derive(Recallable, Recall)]` to the target struct.
-- With the default `serde` feature enabled, it also derives `serde::Serialize` and
-  applies `#[serde(skip)]` to fields annotated with `#[recallable(skip)]`.
-- Direct `#[derive(Recallable, Recall)]` does not mutate the source struct's serde behavior in those ways.
-
-**Attribute ordering:** `#[recallable_model]` must appear before any attributes it needs
-to inspect. An attribute macro's input only contains attributes that follow it in source
-order.
-
-### `#[derive(Recallable)]`
-
-Generates a companion memento type, exposed as `<Struct as Recallable>::Memento`, and implements
-`Recallable` for a struct.
-
-**Requirements:**
-
-- Must be applied to a struct (not enums or unions)
-- Supports lifetime-parameterized structs only when all non-skipped state fields remain owned in the generated
-  memento; non-skipped borrowed fields are rejected
-- Works with named, unnamed (tuple), and unit structs
-
-The generated memento struct derives `Clone`, `Debug`, and `PartialEq`. With the `serde`
-feature enabled, it also derives `Deserialize`. For regular fields, the field type must
-implement these traits. For `#[recallable]` fields, the field's memento type
-(`<FieldType as Recallable>::Memento`) must implement them.
-
-The generated memento type uses the same visibility as the source struct. Its fields always remain
-private because the macro does not emit field-level visibility modifiers. This is intentional: the
-supported usage is to pass the value around as `<Struct as Recallable>::Memento`, typically into
-`Recall::recall` or `TryRecall::try_recall`, rather than to rely on field-by-field inspection
-across module boundaries.
-
-Generated mementos retain the source generics that are actually needed by non-skipped fields,
-including const parameters, along with any retained bounds/defaults and filtered `where`
-predicates required to keep the memento well-formed.
-
-When the `impl_from` feature is enabled, the generated `From<Struct>` implementation also requires
-`<FieldType as Recallable>::Memento: From<FieldType>` for each `#[recallable]` field.
-
-### `#[derive(Recall)]`
-
-Derives the `Recall` trait implementation for a struct.
-
-**Requirements:**
-
-- Must be applied to a struct (not enums or unions)
-- Supports lifetime-parameterized structs only when all non-skipped state fields remain owned in the generated
-  memento; non-skipped borrowed fields are rejected
-- Works with named, unnamed (tuple), and unit structs
-- The target type must implement `Recallable` (derive it or implement manually)
-
-### `#[recallable]` Attribute
-
-Marks a field for recursive recalling.
-
-**Requirements:**
-
-- For `#[derive(Recallable)]`, the field type must implement `Recallable`
-- For `#[derive(Recall)]`, the field type must implement `Recall`
-- Accepts any path type, including parameterized paths (`Option<T>`, `HashMap<K, V>`),
-  module-qualified paths, and associated types (`T::Assoc`, `<T as Trait>::Assoc`)
-- Non-path types such as tuples, arrays, references, slices, and function types are not yet
-  supported with `#[recallable]`
-
-`#[recallable]` does not impose one canonical container semantics. It simply uses the field
-type's own `Recallable::Memento` and `Recall::recall` implementations.
-
-### `Recallable` Trait
-
-```rust
-pub trait Recallable {
-    type Memento;
-}
-```
-
-- `Memento`: The associated memento type. When `#[derive(Recallable)]` is applied, the generated
-  companion struct is an implementation detail; refer its type with `<Type as Recallable>::Memento`.
-  For container-like types, this associated type is intentionally application-defined rather than
-  fixed by the crate.
-
-### `Recall` Trait
-
-```rust
-pub trait Recall: Recallable {
-    fn recall(&mut self, memento: Self::Memento);
-}
-```
-
-- `recall`: Method to apply a memento to the current instance
-
-### `TryRecall` Trait
-
-A fallible variant of `Recall` for cases where applying a memento might fail.
-
-```rust
-pub trait TryRecall: Recallable {
-    type Error: core::error::Error + Send + Sync + 'static;
-    fn try_recall(&mut self, memento: Self::Memento) -> Result<(), Self::Error>;
-}
-```
-
-- `try_recall`: Applies the memento, returning a `Result`. A blanket implementation exists for all types that implement
-  `Recall` (where `Error` is `core::convert::Infallible`).
-
-## Contributing
-
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to get started.
+## More Documentation
+
+- Full guide and reference: [GUIDE.md](GUIDE.md)
+- API docs: [docs.rs/recallable](https://docs.rs/recallable)
+- Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE-MIT.txt) and [Apache-2.0 License](LICENSE-APACHE.txt).
-
-## Related Projects
-
-- [serde](https://serde.rs/) - Serialization framework that integrates seamlessly with Recallable
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for release notes and version history.
+Licensed under either [MIT](LICENSE-MIT.txt) or [Apache-2.0](LICENSE-APACHE.txt),
+at your option.
