@@ -76,7 +76,7 @@ Code generation is free functions (`gen_memento_struct`, `gen_recallable_impl`, 
 - `#[recallable]` accepts any path-based field type (e.g. `Option<T>`, `Wrapper<T>`), not just
   bare type params — these get `Recallable`/`Recall` whole-type bounds
 - `#[recallable(skip)]` fields excluded from memento; with serde feature, also get `#[serde(skip)]`
-- `#[recallable(memento_derive_off)]` suppresses default `Clone`/`Debug`/`PartialEq` derives and
+- `#[recallable(skip_memento_default_derives)]` suppresses default `Clone`/`Debug`/`PartialEq` derives and
   their trait bounds on the generated memento; `Deserialize` is still added when serde is enabled
 - Conflicting `#[recallable]` + `#[recallable(skip)]` on the same field is a compile error
 - Memento visibility matches the source struct (e.g. `pub(crate) struct` → `pub(crate) struct Memento`)
