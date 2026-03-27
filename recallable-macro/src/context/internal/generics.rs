@@ -5,7 +5,7 @@ use quote::quote;
 use syn::visit::Visit;
 use syn::{GenericParam, Generics, Ident, PathArguments, Type, WhereClause, WherePredicate};
 
-use super::ir::FieldIr;
+use super::ir::{FieldIr, VariantIr};
 
 /// Whether a generic parameter is kept on the generated memento type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,6 +125,28 @@ pub(super) fn collect_marker_param_indices(
 ) -> Vec<usize> {
     let referenced_by_fields: HashSet<_> = fields
         .iter()
+        .filter(|field| !field.strategy.is_skip())
+        .flat_map(|field| collect_generic_dependencies_in_type(field.ty, generic_lookup))
+        .collect();
+
+    generic_params
+        .iter()
+        .enumerate()
+        .filter_map(|(index, plan)| {
+            (plan.is_retained() && !referenced_by_fields.contains(&index)).then_some(index)
+        })
+        .collect()
+}
+
+#[must_use]
+pub(super) fn collect_variant_marker_param_indices(
+    variants: &[VariantIr<'_>],
+    generic_params: &[GenericParamPlan<'_>],
+    generic_lookup: &GenericParamLookup<'_>,
+) -> Vec<usize> {
+    let referenced_by_fields: HashSet<_> = variants
+        .iter()
+        .flat_map(|variant| variant.fields.iter())
         .filter(|field| !field.strategy.is_skip())
         .flat_map(|field| collect_generic_dependencies_in_type(field.ty, generic_lookup))
         .collect();
