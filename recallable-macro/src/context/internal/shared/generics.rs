@@ -5,37 +5,33 @@ use quote::quote;
 use syn::visit::Visit;
 use syn::{GenericParam, Generics, Ident, PathArguments, Type, WhereClause, WherePredicate};
 
-use super::ir::{FieldIr, VariantIr};
+use crate::context::internal::{enums::VariantIr, shared::FieldIr};
 
-/// Whether a generic parameter is kept on the generated memento type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum GenericParamRetention {
-    /// Omit the parameter from the generated memento declaration.
+pub(crate) enum GenericParamRetention {
     Dropped,
-    /// Retain the parameter because the memento shape depends on it.
     Retained,
-    /// Retain the type parameter and later add `Recallable`-related bounds for it.
     RetainedAsRecallable,
 }
 
 #[derive(Debug)]
-pub(super) struct GenericParamPlan<'a> {
-    pub(super) param: &'a GenericParam,
+pub(crate) struct GenericParamPlan<'a> {
+    pub(crate) param: &'a GenericParam,
     retention: GenericParamRetention,
 }
 
 impl<'a> GenericParamPlan<'a> {
     #[must_use]
-    pub(super) const fn is_retained(&self) -> bool {
+    pub(crate) const fn is_retained(&self) -> bool {
         !matches!(self.retention, GenericParamRetention::Dropped)
     }
 
-    pub(super) const fn decl_param(&self) -> &GenericParam {
+    pub(crate) const fn decl_param(&self) -> &GenericParam {
         self.param
     }
 
     #[must_use]
-    pub(super) fn type_arg(&self) -> TokenStream2 {
+    pub(crate) fn type_arg(&self) -> TokenStream2 {
         match self.param {
             GenericParam::Lifetime(param) => {
                 let lifetime = &param.lifetime;
@@ -53,7 +49,7 @@ impl<'a> GenericParamPlan<'a> {
     }
 
     #[must_use]
-    pub(super) const fn recallable_ident(&self) -> Option<&'a Ident> {
+    pub(crate) const fn recallable_ident(&self) -> Option<&'a Ident> {
         match (self.param, self.retention) {
             (GenericParam::Type(param), GenericParamRetention::RetainedAsRecallable) => {
                 Some(&param.ident)
@@ -64,13 +60,13 @@ impl<'a> GenericParamPlan<'a> {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct GenericUsage {
-    pub(super) retained: HashSet<usize>,
-    pub(super) recallable_type_params: HashSet<usize>,
+pub(crate) struct GenericUsage {
+    pub(crate) retained: HashSet<usize>,
+    pub(crate) recallable_type_params: HashSet<usize>,
 }
 
 #[derive(Debug)]
-pub(super) struct GenericParamLookup<'a> {
+pub(crate) struct GenericParamLookup<'a> {
     type_params: HashMap<&'a Ident, usize>,
     const_params: HashMap<&'a Ident, usize>,
     lifetime_params: HashMap<&'a Ident, usize>,
@@ -78,7 +74,7 @@ pub(super) struct GenericParamLookup<'a> {
 
 impl<'a> GenericParamLookup<'a> {
     #[must_use]
-    pub(super) fn new(generics: &'a Generics) -> Self {
+    pub(crate) fn new(generics: &'a Generics) -> Self {
         let mut type_params = HashMap::new();
         let mut const_params = HashMap::new();
         let mut lifetime_params = HashMap::new();
@@ -105,7 +101,7 @@ impl<'a> GenericParamLookup<'a> {
     }
 
     #[must_use]
-    pub(super) fn type_param_index(&self, ident: &Ident) -> Option<usize> {
+    pub(crate) fn type_param_index(&self, ident: &Ident) -> Option<usize> {
         self.type_params.get(ident).copied()
     }
 
@@ -114,11 +110,10 @@ impl<'a> GenericParamLookup<'a> {
     }
 }
 
-/// Analysis-only classification for recalled field types.
-pub(super) struct BareTypeParam(pub(super) usize);
+pub(crate) struct BareTypeParam(pub(crate) usize);
 
 #[must_use]
-pub(super) fn collect_marker_param_indices(
+pub(crate) fn collect_marker_param_indices(
     fields: &[FieldIr<'_>],
     generic_params: &[GenericParamPlan<'_>],
     generic_lookup: &GenericParamLookup<'_>,
@@ -139,7 +134,7 @@ pub(super) fn collect_marker_param_indices(
 }
 
 #[must_use]
-pub(super) fn collect_variant_marker_param_indices(
+pub(crate) fn collect_variant_marker_param_indices(
     variants: &[VariantIr<'_>],
     generic_params: &[GenericParamPlan<'_>],
     generic_lookup: &GenericParamLookup<'_>,
@@ -161,7 +156,7 @@ pub(super) fn collect_variant_marker_param_indices(
 }
 
 #[must_use]
-pub(super) fn plan_memento_generics<'a>(
+pub(crate) fn plan_memento_generics<'a>(
     generics: &'a Generics,
     mut usage: GenericUsage,
     generic_lookup: &GenericParamLookup<'a>,
@@ -307,7 +302,6 @@ impl<'ast, 'a> Visit<'ast> for GenericDependencyCollector<'a> {
                 && matches!(first_segment.arguments, PathArguments::None)
                 && let Some(index) = self.lookup.const_param_index(&first_segment.ident)
             {
-                // `syn` represents identity const arguments like `N` as `Type`.
                 self.dependencies.insert(index);
             }
         }
@@ -328,7 +322,7 @@ impl<'ast, 'a> Visit<'ast> for GenericDependencyCollector<'a> {
 }
 
 #[must_use]
-pub(super) fn collect_generic_dependencies_in_type(
+pub(crate) fn collect_generic_dependencies_in_type(
     ty: &Type,
     generic_lookup: &GenericParamLookup<'_>,
 ) -> HashSet<usize> {
@@ -356,7 +350,7 @@ fn collect_generic_dependencies_in_where_predicate(
 }
 
 #[must_use]
-pub(super) fn marker_component(param: &GenericParam) -> TokenStream2 {
+pub(crate) fn marker_component(param: &GenericParam) -> TokenStream2 {
     match param {
         GenericParam::Lifetime(param) => {
             let lifetime = &param.lifetime;

@@ -1,49 +1,56 @@
 use std::collections::HashSet;
 
-use syn::{
-    Data, DataEnum, DataStruct, DeriveInput, Field, Fields, Index, Meta, PathArguments, Type,
-    Variant,
-    punctuated::Punctuated,
-};
+use proc_macro2::TokenStream as TokenStream2;
+use quote::ToTokens;
+use syn::{Field, Ident, Index, Meta, PathArguments, Type};
 
 use super::generics::{
     BareTypeParam, GenericParamLookup, GenericUsage, collect_generic_dependencies_in_type,
 };
-use super::ir::{FieldIr, FieldMember, FieldStrategy, VariantIr, VariantShape};
 use super::lifetime::{field_uses_struct_lifetime, is_phantom_data};
 use super::util::is_recallable_attr;
 
-/// Field-level behavior inferred from `#[recallable]` attributes during analysis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FieldStrategy {
+    Skip,
+    StoreAsSelf,
+    StoreAsMemento,
+}
+
+impl FieldStrategy {
+    pub(crate) const fn is_skip(self) -> bool {
+        matches!(self, Self::Skip)
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct FieldIr<'a> {
+    pub(crate) source: &'a Field,
+    pub(crate) memento_index: Option<usize>,
+    pub(crate) member: FieldMember<'a>,
+    pub(crate) ty: &'a Type,
+    pub(crate) strategy: FieldStrategy,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum FieldMember<'a> {
+    Named(&'a Ident),
+    Unnamed(Index),
+}
+
+impl<'a> ToTokens for FieldMember<'a> {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        match self {
+            Self::Named(ident) => ident.to_tokens(tokens),
+            Self::Unnamed(index) => index.to_tokens(tokens),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FieldBehavior {
-    /// Keep the field in the memento with its original type.
     Keep,
-    /// Store the field as an inner memento and recall this field recursively.
     Recall,
-}
-
-pub(super) fn extract_struct_fields(input: &DeriveInput) -> syn::Result<&Fields> {
-    if let Data::Struct(DataStruct { fields, .. }) = &input.data {
-        Ok(fields)
-    } else {
-        Err(syn::Error::new_spanned(
-            input,
-            "This derive macro can only be applied to structs",
-        ))
-    }
-}
-
-pub(super) fn extract_enum_variants(
-    input: &DeriveInput,
-) -> syn::Result<&Punctuated<Variant, syn::Token![,]>> {
-    if let Data::Enum(DataEnum { variants, .. }) = &input.data {
-        Ok(variants)
-    } else {
-        Err(syn::Error::new_spanned(
-            input,
-            "This derive macro can only be applied to structs or enums",
-        ))
-    }
 }
 
 fn determine_field_behavior(field: &Field) -> syn::Result<Option<FieldBehavior>> {
@@ -80,8 +87,8 @@ fn determine_field_behavior(field: &Field) -> syn::Result<Option<FieldBehavior>>
     }
 
     Ok(match (saw_recall, saw_skip) {
-        (true, false) => Some(FieldBehavior::Recall), // #[recallable]
-        (false, true) => None,                        // #[recallable(skip)]
+        (true, false) => Some(FieldBehavior::Recall),
+        (false, true) => None,
         (false, false) => Some(FieldBehavior::Keep),
         (true, true) => unreachable!("conflicting attributes handled above"),
     })
@@ -116,8 +123,8 @@ fn classify_recallable_field_type(
     }
 }
 
-pub(super) fn collect_field_irs<'a>(
-    fields: &'a Fields,
+pub(crate) fn collect_field_irs<'a>(
+    fields: &'a syn::Fields,
     struct_lifetimes: &HashSet<&'a syn::Ident>,
     generic_lookup: &GenericParamLookup<'a>,
 ) -> syn::Result<(GenericUsage, Vec<FieldIr<'a>>)> {
@@ -177,43 +184,8 @@ pub(super) fn collect_field_irs<'a>(
     Ok((usage, field_irs))
 }
 
-pub(super) fn collect_variant_irs<'a>(
-    variants: &'a Punctuated<Variant, syn::Token![,]>,
-    struct_lifetimes: &HashSet<&'a syn::Ident>,
-    generic_lookup: &GenericParamLookup<'a>,
-) -> syn::Result<(GenericUsage, Vec<VariantIr<'a>>)> {
-    let mut usage = GenericUsage::default();
-    let mut variant_irs = Vec::with_capacity(variants.len());
-
-    for variant in variants {
-        let (variant_usage, fields) =
-            collect_field_irs(&variant.fields, struct_lifetimes, generic_lookup)?;
-        usage.retained.extend(variant_usage.retained);
-        usage
-            .recallable_type_params
-            .extend(variant_usage.recallable_type_params);
-
-        let shape = match &variant.fields {
-            Fields::Named(_) => VariantShape::Named,
-            Fields::Unnamed(_) => VariantShape::Unnamed,
-            Fields::Unit => VariantShape::Unit,
-        };
-
-        variant_irs.push(VariantIr {
-            name: &variant.ident,
-            shape,
-            fields,
-        });
-    }
-
-    Ok((usage, variant_irs))
-}
-
 #[must_use]
 pub(crate) fn has_recallable_skip_attr(field: &Field) -> bool {
-    // Use determine_field_behavior for consistent validation.
-    // In the attribute macro context, we intentionally ignore errors here
-    // because the derive macros will report them with proper spans.
     matches!(determine_field_behavior(field), Ok(None))
 }
 

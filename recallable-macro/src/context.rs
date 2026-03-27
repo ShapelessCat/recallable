@@ -10,8 +10,7 @@
 
 mod from_impl;
 mod internal;
-mod memento_enum;
-mod memento_struct;
+mod memento;
 mod recall_impl;
 mod recallable_impl;
 
@@ -30,10 +29,7 @@ pub(super) const SERDE_ENABLED: bool = cfg!(feature = "serde");
 pub(super) const IMPL_FROM_ENABLED: bool = cfg!(feature = "impl_from");
 
 pub(crate) fn gen_memento_type(ir: &ItemIr, env: &CodegenEnv) -> proc_macro2::TokenStream {
-    match ir {
-        ItemIr::Struct(ir) => memento_struct::gen_memento_struct(ir, env),
-        ItemIr::Enum(ir) => memento_enum::gen_memento_enum(ir, env),
-    }
+    memento::gen_memento_type(ir, env)
 }
 
 #[cfg(test)]
