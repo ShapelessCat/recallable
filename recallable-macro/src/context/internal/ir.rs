@@ -111,15 +111,15 @@ pub(crate) struct StructIr<'a> {
     generic_params: Vec<GenericParamPlan<'a>>,
     memento_where_clause: Option<WhereClause>,
     marker_param_indices: Vec<usize>,
-    memento_derive_off: bool,
+    skip_memento_default_derives: bool,
 }
 
-fn has_memento_derive_off(input: &DeriveInput) -> syn::Result<bool> {
-    let mut found = false;
+fn has_skip_memento_default_derives(input: &DeriveInput) -> syn::Result<bool> {
+    let mut skip_memento_default_derives = false;
     for attr in input.attrs.iter().filter(|a| is_recallable_attr(a)) {
         attr.parse_nested_meta(|meta| {
-            if meta.path.is_ident("memento_derive_off") {
-                found = true;
+            if meta.path.is_ident("skip_memento_default_derives") {
+                skip_memento_default_derives = true;
                 Ok(())
             } else if meta.path.is_ident("skip") {
                 Err(meta.error("`skip` is a field-level attribute, not a struct-level attribute"))
@@ -128,7 +128,7 @@ fn has_memento_derive_off(input: &DeriveInput) -> syn::Result<bool> {
             }
         })?;
     }
-    Ok(found)
+    Ok(skip_memento_default_derives)
 }
 
 impl<'a> StructIr<'a> {
@@ -150,7 +150,7 @@ impl<'a> StructIr<'a> {
             plan_memento_generics(&input.generics, usage, &generic_lookup);
         let marker_param_indices =
             collect_marker_param_indices(&field_irs, &generic_params, &generic_lookup);
-        let memento_derive_off = has_memento_derive_off(input)?;
+        let skip_memento_default_derives = has_skip_memento_default_derives(input)?;
 
         Ok(Self {
             name: &input.ident,
@@ -163,7 +163,7 @@ impl<'a> StructIr<'a> {
             generic_params,
             memento_where_clause,
             marker_param_indices,
-            memento_derive_off,
+            skip_memento_default_derives,
         })
     }
 
@@ -197,7 +197,7 @@ impl<'a> StructIr<'a> {
 
     #[must_use]
     pub(crate) const fn memento_trait_spec(&self) -> MementoTraitSpec {
-        MementoTraitSpec::new(SERDE_ENABLED, self.memento_derive_off)
+        MementoTraitSpec::new(SERDE_ENABLED, self.skip_memento_default_derives)
     }
 
     #[must_use]
