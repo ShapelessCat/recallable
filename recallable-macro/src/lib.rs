@@ -74,7 +74,7 @@ pub fn recallable_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// To suppress the default `Clone`, `Debug`, and `PartialEq` derives (and their
 /// corresponding trait bounds), annotate the struct with
-/// `#[recallable(memento_derive_off)]`. When serde is enabled, `Deserialize` is
+/// `#[recallable(skip_memento_default_derives)]`. When serde is enabled, `Deserialize` is
 /// still derived on the memento even with this attribute.
 ///
 /// When the `impl_from` feature is enabled for the macro crate, a
