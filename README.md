@@ -53,7 +53,7 @@ With the default `serde` feature, the easiest path is `#[recallable_model]`.
 
 ```toml
 [dependencies]
-recallable = "0.1"
+recallable = "0.2"
 serde_json = "1"
 ```
 
