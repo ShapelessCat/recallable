@@ -5,7 +5,7 @@ use syn::{Fields, GenericParam, Generics, Ident, Type};
 
 use super::fields::has_recallable_skip_attr;
 
-pub(super) fn validate_no_borrowed_fields(
+pub(crate) fn validate_no_borrowed_fields(
     fields: &Fields,
     struct_lifetimes: &HashSet<&Ident>,
 ) -> syn::Result<()> {
@@ -39,7 +39,7 @@ pub(super) fn validate_no_borrowed_fields(
 }
 
 #[must_use]
-pub(super) fn collect_struct_lifetimes(generics: &Generics) -> HashSet<&Ident> {
+pub(crate) fn collect_struct_lifetimes(generics: &Generics) -> HashSet<&Ident> {
     generics
         .params
         .iter()
@@ -63,17 +63,8 @@ impl<'ast> Visit<'ast> for LifetimeUsageChecker<'_> {
     }
 }
 
-/// Heuristically detects PhantomData-shaped field types during analysis.
-///
-/// This matches any path type whose final segment is `PhantomData`, so it accepts
-/// `PhantomData`, `marker::PhantomData`, `core::marker::PhantomData`,
-/// `::core::marker::PhantomData`, `std::marker::PhantomData`, and
-/// `::std::marker::PhantomData`.
-///
-/// Because proc macros cannot resolve types, this also intentionally matches any
-/// user-defined type whose final path segment is `PhantomData`.
 #[must_use]
-pub(super) fn is_phantom_data(ty: &Type) -> bool {
+pub(crate) fn is_phantom_data(ty: &Type) -> bool {
     matches!(
         ty,
         Type::Path(p)
@@ -82,7 +73,7 @@ pub(super) fn is_phantom_data(ty: &Type) -> bool {
 }
 
 #[must_use]
-pub(super) fn field_uses_struct_lifetime(ty: &Type, struct_lifetimes: &HashSet<&Ident>) -> bool {
+pub(crate) fn field_uses_struct_lifetime(ty: &Type, struct_lifetimes: &HashSet<&Ident>) -> bool {
     let mut checker = LifetimeUsageChecker {
         struct_lifetimes,
         found: false,
@@ -101,16 +92,10 @@ mod tests {
     fn phantom_data_detection_accepts_common_path_variants() {
         assert!(is_phantom_data(&parse_quote!(PhantomData<u8>)));
         assert!(is_phantom_data(&parse_quote!(marker::PhantomData<u8>)));
-        assert!(is_phantom_data(&parse_quote!(
-            core::marker::PhantomData<u8>
-        )));
-        assert!(is_phantom_data(&parse_quote!(
-            ::core::marker::PhantomData<u8>
-        )));
+        assert!(is_phantom_data(&parse_quote!(core::marker::PhantomData<u8>)));
+        assert!(is_phantom_data(&parse_quote!(::core::marker::PhantomData<u8>)));
         assert!(is_phantom_data(&parse_quote!(std::marker::PhantomData<u8>)));
-        assert!(is_phantom_data(&parse_quote!(
-            ::std::marker::PhantomData<u8>
-        )));
+        assert!(is_phantom_data(&parse_quote!(::std::marker::PhantomData<u8>)));
     }
 
     #[test]
