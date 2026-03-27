@@ -3,11 +3,19 @@ use quote::quote;
 use syn::WherePredicate;
 
 use crate::context::{
-    CodegenEnv, FieldIr, FieldMember, FieldStrategy, StructIr, collect_recall_like_bounds,
+    CodegenEnv, EnumIr, FieldIr, FieldMember, FieldStrategy, ItemIr, StructIr,
+    collect_recall_like_bounds, collect_recall_like_bounds_for_enum,
 };
 
 #[must_use]
-pub(crate) fn gen_recall_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
+pub(crate) fn gen_recall_impl(ir: &ItemIr, env: &CodegenEnv) -> TokenStream2 {
+    match ir {
+        ItemIr::Struct(ir) => gen_struct_recall_impl(ir, env),
+        ItemIr::Enum(ir) => gen_enum_recall_impl(ir, env),
+    }
+}
+
+fn gen_struct_recall_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
     let recall_trait = &env.recall_trait;
     let impl_generics = ir.impl_generics();
     let where_clause = build_recall_where_clause(ir, env);
@@ -19,6 +27,28 @@ pub(crate) fn gen_recall_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
             for #struct_type
         #where_clause {
             #recall_method
+        }
+    }
+}
+
+fn gen_enum_recall_impl(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 {
+    let recall_trait = &env.recall_trait;
+    let impl_generics = ir.impl_generics();
+    let enum_type = ir.enum_type();
+    let where_clause = ir.extend_where_clause(collect_recall_like_bounds_for_enum(
+        ir,
+        env,
+        recall_trait,
+    ));
+
+    quote! {
+        impl #impl_generics #recall_trait
+            for #enum_type
+        #where_clause {
+            #[inline]
+            fn recall(&mut self, memento: Self::Memento) {
+                *self = Self::__recallable_rebuild_from_memento(memento);
+            }
         }
     }
 }

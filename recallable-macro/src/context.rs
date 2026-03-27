@@ -17,10 +17,11 @@ mod recallable_impl;
 
 pub(super) use from_impl::gen_from_impl;
 pub(super) use internal::{
-    CodegenEnv, EnumIr, FieldIr, FieldMember, FieldStrategy, ItemIr, StructIr, StructShape,
-    VariantIr, VariantShape, collect_recall_like_bounds, collect_recall_like_bounds_for_enum,
-    collect_shared_memento_bounds, collect_shared_memento_bounds_for_enum, crate_path,
-    has_recallable_skip_attr, is_generic_type_param,
+    CodegenEnv, EnumIr, EnumRecallMode, FieldIr, FieldMember, FieldStrategy, ItemIr, StructIr,
+    StructShape, VariantIr, VariantShape, collect_recall_like_bounds,
+    collect_recall_like_bounds_for_enum, collect_shared_memento_bounds,
+    collect_shared_memento_bounds_for_enum, crate_path, has_recallable_skip_attr,
+    is_generic_type_param,
 };
 pub(super) use recall_impl::gen_recall_impl;
 pub(super) use recallable_impl::gen_recallable_impl;
