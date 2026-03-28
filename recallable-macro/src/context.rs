@@ -41,14 +41,14 @@ pub(super) fn analyze_recall_input(input: &DeriveInput) -> syn::Result<ItemIr<'_
     Ok(ir)
 }
 
-pub(super) fn analyze_model_input(input: &DeriveInput) -> syn::Result<ItemIr<'_>> {
+pub(super) fn analyze_model_input(input: &DeriveInput) -> syn::Result<()> {
     let ir = analyze_item(input)?;
 
     if let ItemIr::Enum(enum_ir) = &ir {
         enum_ir.ensure_model_derive_allowed()?;
     }
 
-    Ok(ir)
+    Ok(())
 }
 
 pub(crate) fn gen_memento_type(ir: &ItemIr, env: &CodegenEnv) -> proc_macro2::TokenStream {
@@ -88,11 +88,10 @@ mod tests {
 
         assert_eq!(struct_ir.memento_name().to_string(), "ExampleMemento");
         assert_eq!(enum_ir.memento_name().to_string(), "ChoiceMemento");
-        assert_eq!(
+        assert!(
             crate::context::memento::gen_memento_type(&ItemIr::Struct(struct_ir), &env)
                 .to_string()
-                .contains("ExampleMemento"),
-            true
+                .contains("ExampleMemento")
         );
     }
 
