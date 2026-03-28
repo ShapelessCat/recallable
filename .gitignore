@@ -2,6 +2,8 @@
 .vscode/
 .worktrees/
 
+.claude/
+
 target/
 fuzz/artifacts/
 fuzz/coverage/
