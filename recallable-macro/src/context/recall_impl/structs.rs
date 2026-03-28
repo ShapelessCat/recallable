@@ -56,7 +56,7 @@ fn build_recall_statement(field: &FieldIr, recall_trait: &TokenStream2) -> Token
     let member = &field.member;
     let memento_member = build_memento_member(field);
 
-    match &field.strategy {
+    match field.strategy {
         FieldStrategy::StoreAsSelf => {
             quote! { self.#member = memento.#memento_member; }
         }

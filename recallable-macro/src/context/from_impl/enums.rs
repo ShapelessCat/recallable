@@ -127,7 +127,7 @@ fn build_variant_from_expr(variant: &VariantIr<'_>) -> TokenStream2 {
 }
 
 fn build_from_binding_expr(field: &FieldIr<'_>, binding: &syn::Ident) -> TokenStream2 {
-    match &field.strategy {
+    match field.strategy {
         FieldStrategy::StoreAsSelf => quote! { #binding },
         FieldStrategy::StoreAsMemento => quote! { ::core::convert::From::from(#binding) },
         FieldStrategy::Skip => unreachable!("filtered above"),
