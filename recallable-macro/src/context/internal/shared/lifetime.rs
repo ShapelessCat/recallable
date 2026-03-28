@@ -7,9 +7,9 @@ use super::fields::has_recallable_skip_attr;
 
 pub(crate) fn validate_no_borrowed_fields(
     fields: &Fields,
-    struct_lifetimes: &HashSet<&Ident>,
+    item_lifetimes: &HashSet<&Ident>,
 ) -> syn::Result<()> {
-    if struct_lifetimes.is_empty() {
+    if item_lifetimes.is_empty() {
         return Ok(());
     }
 
@@ -22,7 +22,7 @@ pub(crate) fn validate_no_borrowed_fields(
         if is_phantom_data(&field.ty) {
             continue;
         }
-        if field_uses_struct_lifetime(&field.ty, struct_lifetimes) {
+        if field_uses_item_lifetime(&field.ty, item_lifetimes) {
             let err =
                 syn::Error::new_spanned(&field.ty, "Recall derives do not support borrowed fields");
             match &mut errors {
@@ -39,7 +39,7 @@ pub(crate) fn validate_no_borrowed_fields(
 }
 
 #[must_use]
-pub(crate) fn collect_struct_lifetimes(generics: &Generics) -> HashSet<&Ident> {
+pub(crate) fn collect_item_lifetimes(generics: &Generics) -> HashSet<&Ident> {
     generics
         .params
         .iter()
@@ -51,13 +51,13 @@ pub(crate) fn collect_struct_lifetimes(generics: &Generics) -> HashSet<&Ident> {
 }
 
 struct LifetimeUsageChecker<'a> {
-    struct_lifetimes: &'a HashSet<&'a Ident>,
+    item_lifetimes: &'a HashSet<&'a Ident>,
     found: bool,
 }
 
 impl<'ast> Visit<'ast> for LifetimeUsageChecker<'_> {
     fn visit_lifetime(&mut self, lt: &'ast syn::Lifetime) {
-        if self.struct_lifetimes.contains(&lt.ident) {
+        if self.item_lifetimes.contains(&lt.ident) {
             self.found = true;
         }
     }
@@ -73,9 +73,9 @@ pub(crate) fn is_phantom_data(ty: &Type) -> bool {
 }
 
 #[must_use]
-pub(crate) fn field_uses_struct_lifetime(ty: &Type, struct_lifetimes: &HashSet<&Ident>) -> bool {
+pub(crate) fn field_uses_item_lifetime(ty: &Type, item_lifetimes: &HashSet<&Ident>) -> bool {
     let mut checker = LifetimeUsageChecker {
-        struct_lifetimes,
+        item_lifetimes,
         found: false,
     };
     checker.visit_type(ty);
@@ -86,7 +86,7 @@ pub(crate) fn field_uses_struct_lifetime(ty: &Type, struct_lifetimes: &HashSet<&
 mod tests {
     use syn::parse_quote;
 
-    use super::{collect_struct_lifetimes, is_phantom_data, validate_no_borrowed_fields};
+    use super::{collect_item_lifetimes, is_phantom_data, validate_no_borrowed_fields};
 
     #[test]
     fn phantom_data_detection_accepts_common_path_variants() {
@@ -118,8 +118,8 @@ mod tests {
             syn::Data::Struct(data) => &data.fields,
             _ => unreachable!(),
         };
-        let struct_lifetimes = collect_struct_lifetimes(&input.generics);
-        let error = validate_no_borrowed_fields(fields, &struct_lifetimes).unwrap_err();
+        let item_lifetimes = collect_item_lifetimes(&input.generics);
+        let error = validate_no_borrowed_fields(fields, &item_lifetimes).unwrap_err();
 
         assert!(
             error

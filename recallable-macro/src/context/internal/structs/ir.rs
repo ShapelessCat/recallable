@@ -15,7 +15,7 @@ use crate::context::internal::shared::generics::{
 };
 use crate::context::internal::shared::item::has_skip_memento_default_derives;
 use crate::context::internal::shared::lifetime::{
-    collect_struct_lifetimes, validate_no_borrowed_fields,
+    collect_item_lifetimes, validate_no_borrowed_fields,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,8 +55,8 @@ impl<'a> StructIr<'a> {
         let syn::Data::Struct(DataStruct { fields, .. }) = &input.data else {
             unreachable!("StructIr::analyze only receives struct inputs");
         };
-        let struct_lifetimes = collect_struct_lifetimes(&input.generics);
-        validate_no_borrowed_fields(fields, &struct_lifetimes)?;
+        let item_lifetimes = collect_item_lifetimes(&input.generics);
+        validate_no_borrowed_fields(fields, &item_lifetimes)?;
 
         let shape = StructShape::from_fields(fields);
         let memento_name = quote::format_ident!("{}Memento", input.ident);

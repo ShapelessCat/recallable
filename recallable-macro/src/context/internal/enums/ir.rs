@@ -10,12 +10,11 @@ use crate::context::internal::shared::bounds::MementoTraitSpec;
 use crate::context::internal::shared::codegen::CodegenItemIr;
 use crate::context::internal::shared::fields::{FieldIr, FieldStrategy, collect_field_irs};
 use crate::context::internal::shared::generics::{
-    GenericParamLookup, GenericParamPlan, collect_variant_marker_param_indices,
-    plan_memento_generics,
+    GenericParamLookup, GenericParamPlan, collect_marker_param_indices, plan_memento_generics,
 };
 use crate::context::internal::shared::item::has_skip_memento_default_derives;
 use crate::context::internal::shared::lifetime::{
-    collect_struct_lifetimes, is_phantom_data, validate_no_borrowed_fields,
+    collect_item_lifetimes, is_phantom_data, validate_no_borrowed_fields,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,9 +111,9 @@ impl<'a> EnumIr<'a> {
         let syn::Data::Enum(DataEnum { variants, .. }) = &input.data else {
             unreachable!("EnumIr::analyze only receives enum inputs");
         };
-        let struct_lifetimes = collect_struct_lifetimes(&input.generics);
+        let item_lifetimes = collect_item_lifetimes(&input.generics);
         for variant in variants {
-            validate_no_borrowed_fields(&variant.fields, &struct_lifetimes)?;
+            validate_no_borrowed_fields(&variant.fields, &item_lifetimes)?;
         }
 
         let generic_lookup = GenericParamLookup::new(&input.generics);
@@ -126,8 +125,11 @@ impl<'a> EnumIr<'a> {
         let (usage, variant_irs) = collect_variant_irs(variants, &generic_lookup)?;
         let (generic_params, memento_where_clause) =
             plan_memento_generics(&input.generics, usage, &generic_lookup);
-        let marker_param_indices =
-            collect_variant_marker_param_indices(&variant_irs, &generic_params, &generic_lookup);
+        let marker_param_indices = collect_marker_param_indices(
+            variant_irs.iter().flat_map(|variant| variant.fields.iter()),
+            &generic_params,
+            &generic_lookup,
+        );
 
         Ok(Self {
             name: &input.ident,
