@@ -104,27 +104,23 @@ pub fn derive_recallable(input: TokenStream) -> TokenStream {
 
     let memento_struct = context::gen_memento_type(&ir, &env);
     let recallable_impl = context::gen_recallable_impl(&ir, &env);
-    let from_impl = if context::IMPL_FROM_ENABLED {
-        let from_impl = context::gen_from_impl(&ir, &env);
-        quote! {
-            #[automatically_derived]
-            #from_impl
-        }
-    } else {
-        quote! {}
-    };
 
-    let output = quote! {
+    let mut output = quote! {
         const _: () = {
             #[automatically_derived]
             #memento_struct
 
             #[automatically_derived]
             #recallable_impl
-
-            #from_impl
         };
     };
+    if context::IMPL_FROM_ENABLED {
+        let from_impl = context::gen_from_impl(&ir, &env);
+        output.extend(quote! {
+            #[automatically_derived]
+            #from_impl
+        })
+    }
     output.into()
 }
 
