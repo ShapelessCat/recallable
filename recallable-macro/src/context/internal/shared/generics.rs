@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::visit::Visit;
 use syn::{GenericParam, Generics, Ident, PathArguments, Type, WhereClause, WherePredicate};
 
@@ -343,7 +343,8 @@ pub(crate) fn marker_component(param: &GenericParam) -> TokenStream2 {
         }
         GenericParam::Const(param) => {
             let ident = &param.ident;
-            quote! { [(); { let _ = #ident; 0usize }] }
+            let helper_ident = format_ident!("__RecallableConstMarker_{ident}");
+            quote! { #helper_ident<#ident> }
         }
     }
 }
