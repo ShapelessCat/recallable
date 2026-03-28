@@ -2,7 +2,9 @@ use std::collections::HashSet;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{DeriveInput, Fields, Generics, Ident, ImplGenerics, Visibility, WhereClause};
+use syn::{
+    DataStruct, DeriveInput, Fields, Generics, Ident, ImplGenerics, Visibility, WhereClause,
+};
 
 use crate::context::SERDE_ENABLED;
 use crate::context::internal::shared::bounds::MementoTraitSpec;
@@ -48,20 +50,11 @@ pub(crate) struct StructIr<'a> {
     skip_memento_default_derives: bool,
 }
 
-fn extract_struct_fields(input: &DeriveInput) -> syn::Result<&Fields> {
-    if let syn::Data::Struct(data) = &input.data {
-        Ok(&data.fields)
-    } else {
-        Err(syn::Error::new_spanned(
-            input,
-            "This derive macro can only be applied to structs",
-        ))
-    }
-}
-
 impl<'a> StructIr<'a> {
     pub(crate) fn analyze(input: &'a DeriveInput) -> syn::Result<Self> {
-        let fields = extract_struct_fields(input)?;
+        let syn::Data::Struct(DataStruct { fields, .. }) = &input.data else {
+            unreachable!("StructIr::analyze only receives struct inputs");
+        };
         let struct_lifetimes = collect_struct_lifetimes(&input.generics);
         validate_no_borrowed_fields(fields, &struct_lifetimes)?;
 

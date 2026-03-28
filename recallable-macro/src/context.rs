@@ -128,4 +128,20 @@ mod tests {
         assert_eq!(memento.ident.to_string(), "ExampleMemento");
         assert_eq!(memento.vis.to_token_stream().to_string(), "pub (crate)");
     }
+
+    #[test]
+    fn analyze_item_rejects_unions_at_outer_boundary() {
+        let input: syn::DeriveInput = parse_quote! {
+            union Example {
+                value: u32,
+            }
+        };
+
+        let error = analyze_item(&input).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "This derive macro can only be applied to structs or enums"
+        );
+    }
 }
