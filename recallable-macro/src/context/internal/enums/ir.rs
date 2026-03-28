@@ -1,12 +1,13 @@
 use std::collections::HashSet;
 
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{
     DeriveInput, Generics, Ident, ImplGenerics, Type, Visibility, WhereClause, WherePredicate,
 };
 
 use crate::context::SERDE_ENABLED;
+use crate::context::internal::shared::FieldMember;
 use crate::context::internal::shared::bounds::MementoTraitSpec;
 use crate::context::internal::shared::fields::{FieldIr, FieldStrategy, collect_field_irs};
 use crate::context::internal::shared::generics::{
@@ -44,6 +45,13 @@ pub(crate) struct EnumIr<'a> {
     memento_where_clause: Option<WhereClause>,
     marker_param_indices: Vec<usize>,
     skip_memento_default_derives: bool,
+}
+
+pub(crate) fn build_binding_ident(field: &FieldIr<'_>, index: usize) -> syn::Ident {
+    match &field.member {
+        FieldMember::Named(name) => (*name).clone(),
+        FieldMember::Unnamed(_) => format_ident!("__recallable_field_{index}"),
+    }
 }
 
 const ENUM_RECALL_MANUAL_ONLY_ERROR: &str = "enum `Recall` derive requires assignment-only variant fields; derive `Recallable` and \
