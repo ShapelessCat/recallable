@@ -165,7 +165,10 @@ impl ModelItem {
     }
 
     fn parse(&self) -> syn::Result<syn::DeriveInput> {
-        syn::parse2(self.item_tokenstream())
+        Ok(match self {
+            ModelItem::Struct(item) => item.clone().into(),
+            ModelItem::Enum(item) => item.clone().into(),
+        })
     }
 }
 
