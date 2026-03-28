@@ -16,6 +16,7 @@ pub(crate) fn gen_enum_from_impl(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 
     let from_method = build_enum_from_method(ir);
 
     quote! {
+        #[automatically_derived]
         impl #impl_generics ::core::convert::From<#enum_type>
             for #memento_type
         #where_clause {
@@ -125,7 +126,7 @@ fn build_enum_from_where_clause(ir: &EnumIr, env: &CodegenEnv) -> Option<syn::Wh
                     syn::parse_quote! { #ty::Memento: ::core::convert::From<#ty> },
                 ]
             })
-            .chain(collect_shared_memento_bounds_for_enum(ir, env).into_iter())
+            .chain(collect_shared_memento_bounds_for_enum(ir, env))
             .chain(ir.whole_type_from_bounds(recallable_trait)),
     )
 }

@@ -35,6 +35,7 @@ pub(crate) fn gen_memento_enum(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 {
         );
 
     quote! {
+        #[automatically_derived]
         #[allow(dead_code)]
         #derives
         #visibility enum #memento_name #memento_generics #where_clause {

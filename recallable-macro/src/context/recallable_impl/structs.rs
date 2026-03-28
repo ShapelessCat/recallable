@@ -14,6 +14,7 @@ pub(crate) fn gen_struct_recallable_impl(ir: &StructIr, env: &CodegenEnv) -> Tok
     let memento_type = ir.memento_type();
 
     quote! {
+        #[automatically_derived]
         impl #impl_generics #recallable_trait
             for #struct_type
         #where_clause {

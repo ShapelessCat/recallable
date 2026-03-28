@@ -14,6 +14,7 @@ pub(crate) fn gen_struct_from_impl(ir: &StructIr, env: &CodegenEnv) -> TokenStre
     let from_method = build_from_method(ir);
 
     quote! {
+        #[automatically_derived]
         impl #impl_generics ::core::convert::From<#struct_type>
             for #memento_type
         #where_clause {
@@ -97,7 +98,7 @@ fn build_from_where_clause(ir: &StructIr, env: &CodegenEnv) -> Option<syn::Where
                     syn::parse_quote! { #ty::Memento: ::core::convert::From<#ty> },
                 ]
             })
-            .chain(collect_shared_memento_bounds(ir, env).into_iter())
+            .chain(collect_shared_memento_bounds(ir, env))
             .chain(ir.whole_type_from_bounds(recallable_trait)),
     )
 }

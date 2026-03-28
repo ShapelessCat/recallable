@@ -17,6 +17,7 @@ pub(crate) fn gen_enum_recallable_impl(ir: &EnumIr, env: &CodegenEnv) -> TokenSt
     let restore_helper = gen_enum_restore_helper(ir, env);
 
     quote! {
+        #[automatically_derived]
         impl #impl_generics #recallable_trait
             for #enum_type
         #where_clause {
