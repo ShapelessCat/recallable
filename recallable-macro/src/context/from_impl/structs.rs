@@ -2,7 +2,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::WherePredicate;
 
-use crate::context::internal::shared::{CodegenEnv, FieldIr, FieldStrategy};
+use crate::context::internal::shared::{CodegenEnv, CodegenItemIr, FieldIr, build_from_value_expr};
 use crate::context::internal::structs::{StructIr, StructShape, collect_shared_memento_bounds};
 
 #[must_use]
@@ -84,13 +84,7 @@ fn build_named_marker_init() -> TokenStream2 {
 
 fn build_from_expr(field: &FieldIr) -> TokenStream2 {
     let member = &field.member;
-    match field.strategy {
-        FieldStrategy::StoreAsSelf => quote! { value.#member },
-        FieldStrategy::StoreAsMemento => {
-            quote! { ::core::convert::From::from(value.#member) }
-        }
-        FieldStrategy::Skip => unreachable!("memento_fields() filters skipped fields"),
-    }
+    build_from_value_expr(quote! { value.#member }, field.strategy)
 }
 
 fn build_from_where_clause(ir: &StructIr, env: &CodegenEnv) -> Option<syn::WhereClause> {

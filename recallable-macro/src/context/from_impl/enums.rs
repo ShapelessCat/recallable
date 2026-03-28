@@ -5,7 +5,7 @@ use syn::WherePredicate;
 use crate::context::internal::enums::{
     EnumIr, VariantIr, VariantShape, build_binding_ident, collect_shared_memento_bounds_for_enum,
 };
-use crate::context::internal::shared::{CodegenEnv, FieldIr, FieldStrategy};
+use crate::context::internal::shared::{CodegenEnv, CodegenItemIr, FieldIr, build_from_value_expr};
 
 #[must_use]
 pub(crate) fn gen_enum_from_impl(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 {
@@ -120,11 +120,7 @@ fn build_variant_from_expr(variant: &VariantIr<'_>) -> TokenStream2 {
 }
 
 fn build_from_binding_expr(field: &FieldIr<'_>, binding: &syn::Ident) -> TokenStream2 {
-    match field.strategy {
-        FieldStrategy::StoreAsSelf => quote! { #binding },
-        FieldStrategy::StoreAsMemento => quote! { ::core::convert::From::from(#binding) },
-        FieldStrategy::Skip => unreachable!("filtered above"),
-    }
+    build_from_value_expr(quote! { #binding }, field.strategy)
 }
 
 fn build_enum_from_where_clause(ir: &EnumIr, env: &CodegenEnv) -> Option<syn::WhereClause> {

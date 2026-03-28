@@ -384,6 +384,7 @@ mod tests {
     use quote::{ToTokens, quote};
     use syn::parse_quote;
 
+    use crate::context::internal::shared::CodegenItemIr;
     use crate::context::internal::structs::StructIr;
 
     #[test]

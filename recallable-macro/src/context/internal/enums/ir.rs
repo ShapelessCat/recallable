@@ -2,17 +2,16 @@ use std::collections::HashSet;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use syn::{
-    DeriveInput, Generics, Ident, ImplGenerics, Type, Visibility, WhereClause, WherePredicate,
-};
+use syn::{DeriveInput, Generics, Ident, ImplGenerics, Visibility, WhereClause};
 
 use crate::context::SERDE_ENABLED;
 use crate::context::internal::shared::FieldMember;
 use crate::context::internal::shared::bounds::MementoTraitSpec;
+use crate::context::internal::shared::codegen::CodegenItemIr;
 use crate::context::internal::shared::fields::{FieldIr, FieldStrategy, collect_field_irs};
 use crate::context::internal::shared::generics::{
     GenericParamLookup, GenericParamPlan, collect_variant_marker_param_indices,
-    is_generic_type_param, marker_component, plan_memento_generics,
+    plan_memento_generics,
 };
 use crate::context::internal::shared::item::has_skip_memento_default_derives;
 use crate::context::internal::shared::lifetime::{
@@ -174,63 +173,8 @@ impl<'a> EnumIr<'a> {
         MementoTraitSpec::new(SERDE_ENABLED, self.skip_memento_default_derives)
     }
 
-    #[must_use]
-    pub(crate) fn memento_decl_generics(&self) -> TokenStream2 {
-        let mut params = self
-            .generic_params
-            .iter()
-            .filter(|plan| plan.is_retained())
-            .map(GenericParamPlan::decl_param)
-            .peekable();
-
-        if params.peek().is_none() {
-            quote! {}
-        } else {
-            quote! { <#(#params),*> }
-        }
-    }
-
     pub(crate) const fn memento_where_clause(&self) -> Option<&WhereClause> {
         self.memento_where_clause.as_ref()
-    }
-
-    #[must_use]
-    pub(crate) fn synthetic_marker_type(&self) -> Option<TokenStream2> {
-        if self.marker_param_indices.is_empty() {
-            return None;
-        }
-
-        let components = self
-            .marker_param_indices
-            .iter()
-            .map(|&index| marker_component(self.generic_params[index].param));
-
-        Some(quote! {
-            ::core::marker::PhantomData<(#(#components,)*)>
-        })
-    }
-
-    pub(crate) fn recallable_params(&self) -> impl Iterator<Item = &Ident> {
-        self.generic_params
-            .iter()
-            .filter_map(GenericParamPlan::recallable_ident)
-    }
-
-    #[must_use]
-    pub(crate) fn memento_type(&self) -> TokenStream2 {
-        let name = &self.memento_name;
-        let mut args = self
-            .generic_params
-            .iter()
-            .filter(|plan| plan.is_retained())
-            .map(GenericParamPlan::type_arg)
-            .peekable();
-
-        if args.peek().is_none() {
-            quote! { #name }
-        } else {
-            quote! { #name<#(#args),*> }
-        }
     }
 
     pub(crate) fn variants(&self) -> impl Iterator<Item = &VariantIr<'a>> {
@@ -269,84 +213,44 @@ impl<'a> EnumIr<'a> {
 
         Ok(())
     }
+}
 
-    pub(crate) fn recallable_bounds(
-        &self,
-        bound: &TokenStream2,
-    ) -> impl Iterator<Item = WherePredicate> {
-        self.recallable_params()
-            .map(move |ty| syn::parse_quote! { #ty: #bound })
+impl<'a> CodegenItemIr<'a> for EnumIr<'a> {
+    type Fields<'b>
+        = std::iter::FlatMap<
+        std::slice::Iter<'b, VariantIr<'a>>,
+        std::slice::Iter<'b, FieldIr<'a>>,
+        fn(&'b VariantIr<'a>) -> std::slice::Iter<'b, FieldIr<'a>>,
+    >
+    where
+        Self: 'b,
+        'a: 'b;
+
+    fn generics(&self) -> &'a Generics {
+        self.generics
     }
 
-    pub(crate) fn recallable_memento_bounds(
-        &self,
-        bound: &TokenStream2,
-    ) -> impl Iterator<Item = WherePredicate> {
-        self.recallable_params()
-            .map(move |ty| syn::parse_quote! { #ty::Memento: #bound })
+    fn memento_name(&self) -> &Ident {
+        &self.memento_name
     }
 
-    fn whole_type_bound_targets(&self) -> impl Iterator<Item = &Type> {
-        let mut seen = HashSet::new();
-
-        self.variants
-            .iter()
-            .flat_map(|variant| variant.fields.iter())
-            .filter_map(move |field| match field.strategy {
-                FieldStrategy::StoreAsMemento
-                    if !is_generic_type_param(field.ty, &self.generic_type_param_idents)
-                        && seen.insert(field.ty) =>
-                {
-                    Some(field.ty)
-                }
-                _ => None,
-            })
+    fn generic_type_param_idents(&self) -> &HashSet<&'a Ident> {
+        &self.generic_type_param_idents
     }
 
-    pub(crate) fn whole_type_bounds<'b>(
-        &'b self,
-        bound: &'b TokenStream2,
-    ) -> impl Iterator<Item = WherePredicate> + 'b {
-        self.whole_type_bound_targets()
-            .map(move |ty| syn::parse_quote! { #ty: #bound })
+    fn generic_params(&self) -> &[GenericParamPlan<'a>] {
+        &self.generic_params
     }
 
-    pub(crate) fn whole_type_memento_bounds(
-        &self,
-        recallable_trait: &TokenStream2,
-        bound: &TokenStream2,
-    ) -> impl Iterator<Item = WherePredicate> {
-        self.whole_type_bound_targets()
-            .map(move |ty| syn::parse_quote! { <#ty as #recallable_trait>::Memento: #bound })
+    fn marker_param_indices(&self) -> &[usize] {
+        &self.marker_param_indices
     }
 
-    pub(crate) fn whole_type_from_bounds(
-        &self,
-        recallable_trait: &TokenStream2,
-    ) -> impl Iterator<Item = WherePredicate> {
-        self.whole_type_bound_targets().flat_map(move |ty| {
-            [
-                syn::parse_quote! { #ty: #recallable_trait },
-                syn::parse_quote! { <#ty as #recallable_trait>::Memento: ::core::convert::From<#ty> },
-            ]
-        })
+    fn all_fields(&self) -> Self::Fields<'_> {
+        self.variants.iter().flat_map(variant_fields)
     }
+}
 
-    pub(crate) fn extend_where_clause(
-        &self,
-        extra: impl IntoIterator<Item = WherePredicate>,
-    ) -> Option<WhereClause> {
-        let mut where_clause = self.generics.where_clause.clone();
-        let mut extra_iter = extra.into_iter().peekable();
-        if extra_iter.peek().is_none() {
-            where_clause
-        } else {
-            where_clause
-                .get_or_insert(syn::parse_quote! { where })
-                .predicates
-                .extend(extra_iter);
-
-            where_clause
-        }
-    }
+fn variant_fields<'a, 'b>(variant: &'b VariantIr<'a>) -> std::slice::Iter<'b, FieldIr<'a>> {
+    variant.fields.iter()
 }

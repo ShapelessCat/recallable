@@ -1,5 +1,8 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+use syn::WherePredicate;
+
+use super::{CodegenEnv, CodegenItemIr};
 
 #[derive(Debug)]
 pub(crate) struct MementoTraitSpec {
@@ -58,6 +61,58 @@ impl MementoTraitSpec {
     const fn has_common_traits(&self) -> bool {
         !self.derive_off
     }
+}
+
+#[must_use]
+pub(crate) fn collect_shared_memento_bounds<'a, T>(
+    ir: &T,
+    env: &CodegenEnv,
+    memento_trait_spec: &MementoTraitSpec,
+) -> Vec<WherePredicate>
+where
+    T: CodegenItemIr<'a>,
+{
+    let recallable_trait = &env.recallable_trait;
+    let memento_trait_bounds = memento_trait_spec.common_bound_tokens();
+
+    let mut bounds = ir
+        .recallable_memento_bounds(&memento_trait_bounds)
+        .collect::<Vec<_>>();
+    bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &memento_trait_bounds));
+    if let Some(deserialize_owned) = memento_trait_spec.serde_nested_bound() {
+        bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &deserialize_owned));
+    }
+
+    bounds
+}
+
+#[must_use]
+pub(crate) fn collect_recall_like_bounds<'a, T>(
+    ir: &T,
+    env: &CodegenEnv,
+    direct_bound: &TokenStream2,
+    memento_trait_spec: &MementoTraitSpec,
+) -> Vec<WherePredicate>
+where
+    T: CodegenItemIr<'a>,
+{
+    let shared_memento_bounds = collect_shared_memento_bounds(ir, env, memento_trait_spec);
+    let shared_param_bound_count = ir.recallable_params().count();
+
+    let mut bounds = ir.recallable_bounds(direct_bound).collect::<Vec<_>>();
+    bounds.extend(
+        shared_memento_bounds
+            .iter()
+            .take(shared_param_bound_count)
+            .cloned(),
+    );
+    bounds.extend(ir.whole_type_bounds(direct_bound));
+    bounds.extend(
+        shared_memento_bounds
+            .into_iter()
+            .skip(shared_param_bound_count),
+    );
+    bounds
 }
 
 #[cfg(test)]

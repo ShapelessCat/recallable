@@ -9,7 +9,7 @@ use crate::context::internal::enums::{
     EnumIr, VariantIr, VariantShape, collect_recall_like_bounds_for_enum,
 };
 use crate::context::internal::shared::{
-    CodegenEnv, FieldIr, FieldMember, FieldStrategy, is_generic_type_param,
+    CodegenEnv, CodegenItemIr, FieldIr, build_memento_field_tokens,
 };
 
 #[must_use]
@@ -93,23 +93,7 @@ fn build_memento_field(
     recallable_trait: &TokenStream2,
     generic_type_params: &HashSet<&Ident>,
 ) -> TokenStream2 {
-    let ty = field.ty;
-    let field_ty = match field.strategy {
-        FieldStrategy::StoreAsMemento => {
-            if is_generic_type_param(ty, generic_type_params) {
-                quote! { #ty::Memento }
-            } else {
-                quote! { <#ty as #recallable_trait>::Memento }
-            }
-        }
-        FieldStrategy::StoreAsSelf => quote! { #ty },
-        FieldStrategy::Skip => unreachable!("filtered above"),
-    };
-
-    match &field.member {
-        FieldMember::Named(name) => quote! { #name: #field_ty },
-        FieldMember::Unnamed(_) => quote! { #field_ty },
-    }
+    build_memento_field_tokens(field, recallable_trait, generic_type_params)
 }
 
 fn build_marker_variant(marker_ty: &TokenStream2) -> TokenStream2 {

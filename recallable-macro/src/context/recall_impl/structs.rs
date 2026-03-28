@@ -2,7 +2,9 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::WherePredicate;
 
-use crate::context::internal::shared::{CodegenEnv, FieldIr, FieldMember, FieldStrategy};
+use crate::context::internal::shared::{
+    CodegenEnv, CodegenItemIr, FieldIr, FieldMember, FieldStrategy,
+};
 use crate::context::internal::structs::{StructIr, collect_recall_like_bounds};
 
 #[must_use]
