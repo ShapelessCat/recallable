@@ -85,13 +85,11 @@ fn build_binding_pattern(field: &FieldIr<'_>, index: usize) -> TokenStream2 {
     }
 }
 
-fn build_variant_from_expr(variant: &VariantIr<'_>) -> TokenStream2 {
+fn build_variant_from_expr(variant: &VariantIr<'_>) -> Option<TokenStream2> {
     let mut kept_fields = variant.kept_fields().peekable();
-    if kept_fields.peek().is_none() {
-        return quote! {};
-    }
-
     match variant.shape {
+        VariantShape::Unit => None,
+        _ if kept_fields.peek().is_none() => None,
         VariantShape::Named => {
             let inits = kept_fields.map(|(index, field)| {
                 let member = &field.member;
@@ -99,16 +97,15 @@ fn build_variant_from_expr(variant: &VariantIr<'_>) -> TokenStream2 {
                 let value = build_from_binding_expr(field, &binding);
                 quote! { #member: #value }
             });
-            quote! { { #(#inits),* } }
+            Some(quote! { { #(#inits),* } })
         }
         VariantShape::Unnamed => {
             let values = kept_fields.map(|(index, field)| {
                 let binding = build_binding_ident(field, index);
                 build_from_binding_expr(field, &binding)
             });
-            quote! { ( #(#values),* ) }
+            Some(quote! { ( #(#values),* ) })
         }
-        VariantShape::Unit => quote! {},
     }
 }
 
