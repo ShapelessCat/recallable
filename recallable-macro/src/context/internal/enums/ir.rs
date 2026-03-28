@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use syn::{DeriveInput, Generics, Ident, ImplGenerics, Visibility, WhereClause};
+use syn::{DataEnum, DeriveInput, Generics, Ident, ImplGenerics, Visibility, WhereClause};
 
 use crate::context::SERDE_ENABLED;
 use crate::context::internal::shared::FieldMember;
@@ -74,19 +74,6 @@ const ENUM_RECALL_MANUAL_ONLY_ERROR: &str = "enum `Recall` derive requires assig
 const ENUM_MODEL_MANUAL_ONLY_ERROR: &str = "`#[recallable_model]` on enums requires assignment-only variants; complex enums should \
      derive `Recallable` and implement `Recall` or `TryRecall` manually";
 
-fn extract_enum_variants(
-    input: &DeriveInput,
-) -> syn::Result<&syn::punctuated::Punctuated<syn::Variant, syn::Token![,]>> {
-    if let syn::Data::Enum(data) = &input.data {
-        Ok(&data.variants)
-    } else {
-        Err(syn::Error::new_spanned(
-            input,
-            "This derive macro can only be applied to structs or enums",
-        ))
-    }
-}
-
 fn collect_variant_irs<'a>(
     variants: &'a syn::punctuated::Punctuated<syn::Variant, syn::Token![,]>,
     generic_lookup: &GenericParamLookup<'a>,
@@ -122,7 +109,9 @@ fn collect_variant_irs<'a>(
 
 impl<'a> EnumIr<'a> {
     pub(crate) fn analyze(input: &'a DeriveInput) -> syn::Result<Self> {
-        let variants = extract_enum_variants(input)?;
+        let syn::Data::Enum(DataEnum { variants, .. }) = &input.data else {
+            unreachable!("EnumIr::analyze only receives enum inputs");
+        };
         let struct_lifetimes = collect_struct_lifetimes(&input.generics);
         for variant in variants {
             validate_no_borrowed_fields(&variant.fields, &struct_lifetimes)?;
