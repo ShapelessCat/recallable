@@ -32,6 +32,22 @@ pub(crate) struct VariantIr<'a> {
     pub(crate) fields: Vec<FieldIr<'a>>,
 }
 
+impl<'a> VariantIr<'a> {
+    pub(crate) fn indexed_fields(&self) -> impl Iterator<Item = (usize, &FieldIr<'a>)> {
+        self.fields.iter().enumerate()
+    }
+
+    pub(crate) fn kept_fields(&self) -> impl Iterator<Item = (usize, &FieldIr<'a>)> {
+        self.indexed_fields()
+            .filter(|(_, field)| !field.strategy.is_skip())
+    }
+
+    pub(crate) fn bindings(&self) -> impl Iterator<Item = syn::Ident> + '_ {
+        self.indexed_fields()
+            .map(|(index, field)| build_binding_ident(field, index))
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct EnumIr<'a> {
     name: &'a Ident,

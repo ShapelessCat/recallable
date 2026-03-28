@@ -79,11 +79,10 @@ fn parse_model_item(item: TokenStream) -> syn::Result<ModelItem> {
 }
 
 fn add_serde_skip_attrs_to_fields(fields: &mut Fields) {
-    for field in fields.iter_mut() {
-        if has_recallable_skip_attr(field) {
-            field.attrs.push(parse_quote! { #[serde(skip)] });
-        }
-    }
+    fields
+        .iter_mut()
+        .filter(|field| has_recallable_skip_attr(field))
+        .for_each(|field| field.attrs.push(parse_quote! { #[serde(skip)] }));
 }
 
 /// Returns an error if any existing `#[derive(...)]` attribute on the struct
@@ -136,25 +135,31 @@ impl ModelItem {
         }
     }
 
+    fn attrs_mut(&mut self) -> &mut Vec<syn::Attribute> {
+        match self {
+            Self::Struct(item) => &mut item.attrs,
+            Self::Enum(item) => &mut item.attrs,
+        }
+    }
+
+    fn with_fields_mut(&mut self, mut apply: impl FnMut(&mut Fields)) {
+        match self {
+            Self::Struct(item) => apply(&mut item.fields),
+            Self::Enum(item) => item
+                .variants
+                .iter_mut()
+                .for_each(|variant| apply(&mut variant.fields)),
+        }
+    }
+
     fn add_derives(&mut self) {
         let crate_path = crate_path();
         let derives = build_model_derive_attr(&crate_path);
-        let attrs = match self {
-            Self::Struct(item) => &mut item.attrs,
-            Self::Enum(item) => &mut item.attrs,
-        };
-        attrs.push(derives);
+        self.attrs_mut().push(derives);
     }
 
     fn add_serde_skip_attrs(&mut self) {
-        match self {
-            Self::Struct(item) => add_serde_skip_attrs_to_fields(&mut item.fields),
-            Self::Enum(item) => {
-                for variant in &mut item.variants {
-                    add_serde_skip_attrs_to_fields(&mut variant.fields);
-                }
-            }
-        }
+        self.with_fields_mut(add_serde_skip_attrs_to_fields);
     }
 
     fn item_tokenstream(&self) -> TokenStream2 {

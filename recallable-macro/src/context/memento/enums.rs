@@ -68,20 +68,16 @@ fn build_memento_variant(
     generic_type_params: &HashSet<&Ident>,
 ) -> TokenStream2 {
     let name = variant.name;
-    let fields: Vec<_> = variant
-        .fields
-        .iter()
-        .filter(|field| !field.strategy.is_skip())
-        .map(|field| build_memento_field(field, recallable_trait, generic_type_params))
-        .collect();
+    let mut fields = variant
+        .kept_fields()
+        .map(|(_, field)| build_memento_field(field, recallable_trait, generic_type_params))
+        .peekable();
 
-    let shape = if fields.is_empty() {
-        VariantShape::Unit
-    } else {
-        variant.shape
-    };
+    if fields.peek().is_none() {
+        return quote! { #name };
+    }
 
-    match shape {
+    match variant.shape {
         VariantShape::Named => quote! { #name { #(#fields),* } },
         VariantShape::Unnamed => quote! { #name(#(#fields),*) },
         VariantShape::Unit => quote! { #name },

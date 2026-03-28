@@ -88,22 +88,16 @@ fn build_from_expr(field: &FieldIr) -> TokenStream2 {
 }
 
 fn build_from_where_clause(ir: &StructIr, env: &CodegenEnv) -> Option<syn::WhereClause> {
-    let bounds = collect_from_bounds(ir, env);
-    ir.extend_where_clause(bounds)
-}
-
-fn collect_from_bounds(ir: &StructIr, env: &CodegenEnv) -> Vec<WherePredicate> {
     let recallable_trait = &env.recallable_trait;
-    let mut bounds: Vec<_> = ir
-        .recallable_params()
-        .flat_map(|ty| -> [WherePredicate; 2] {
-            [
-                syn::parse_quote! { #ty: #recallable_trait },
-                syn::parse_quote! { #ty::Memento: ::core::convert::From<#ty> },
-            ]
-        })
-        .collect();
-    bounds.extend(collect_shared_memento_bounds(ir, env));
-    bounds.extend(ir.whole_type_from_bounds(recallable_trait));
-    bounds
+    ir.extend_where_clause(
+        ir.recallable_params()
+            .flat_map(|ty| -> [WherePredicate; 2] {
+                [
+                    syn::parse_quote! { #ty: #recallable_trait },
+                    syn::parse_quote! { #ty::Memento: ::core::convert::From<#ty> },
+                ]
+            })
+            .chain(collect_shared_memento_bounds(ir, env).into_iter())
+            .chain(ir.whole_type_from_bounds(recallable_trait)),
+    )
 }

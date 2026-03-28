@@ -56,7 +56,7 @@ fn build_enum_from_body(ir: &EnumIr) -> TokenStream2 {
 fn build_variant_source_pattern(variant: &VariantIr<'_>) -> TokenStream2 {
     match variant.shape {
         VariantShape::Named => {
-            let patterns = variant.fields.iter().enumerate().map(|(index, field)| {
+            let patterns = variant.indexed_fields().map(|(index, field)| {
                 if field.strategy.is_skip() {
                     let member = &field.member;
                     quote! { #member: _ }
@@ -68,9 +68,7 @@ fn build_variant_source_pattern(variant: &VariantIr<'_>) -> TokenStream2 {
         }
         VariantShape::Unnamed => {
             let patterns = variant
-                .fields
-                .iter()
-                .enumerate()
+                .indexed_fields()
                 .map(|(index, field)| build_binding_pattern(field, index));
             quote! { ( #(#patterns),* ) }
         }
@@ -87,20 +85,14 @@ fn build_binding_pattern(field: &FieldIr<'_>, index: usize) -> TokenStream2 {
 }
 
 fn build_variant_from_expr(variant: &VariantIr<'_>) -> TokenStream2 {
-    let kept_fields: Vec<_> = variant
-        .fields
-        .iter()
-        .enumerate()
-        .filter(|(_, field)| !field.strategy.is_skip())
-        .collect();
-
-    if kept_fields.is_empty() {
+    let mut kept_fields = variant.kept_fields().peekable();
+    if kept_fields.peek().is_none() {
         return quote! {};
     }
 
     match variant.shape {
         VariantShape::Named => {
-            let inits = kept_fields.into_iter().map(|(index, field)| {
+            let inits = kept_fields.map(|(index, field)| {
                 let member = &field.member;
                 let binding = build_binding_ident(field, index);
                 let value = build_from_binding_expr(field, &binding);
@@ -109,7 +101,7 @@ fn build_variant_from_expr(variant: &VariantIr<'_>) -> TokenStream2 {
             quote! { { #(#inits),* } }
         }
         VariantShape::Unnamed => {
-            let values = kept_fields.into_iter().map(|(index, field)| {
+            let values = kept_fields.map(|(index, field)| {
                 let binding = build_binding_ident(field, index);
                 build_from_binding_expr(field, &binding)
             });
@@ -124,22 +116,16 @@ fn build_from_binding_expr(field: &FieldIr<'_>, binding: &syn::Ident) -> TokenSt
 }
 
 fn build_enum_from_where_clause(ir: &EnumIr, env: &CodegenEnv) -> Option<syn::WhereClause> {
-    let bounds = collect_enum_from_bounds(ir, env);
-    ir.extend_where_clause(bounds)
-}
-
-fn collect_enum_from_bounds(ir: &EnumIr, env: &CodegenEnv) -> Vec<WherePredicate> {
     let recallable_trait = &env.recallable_trait;
-    let mut bounds: Vec<_> = ir
-        .recallable_params()
-        .flat_map(|ty| -> [WherePredicate; 2] {
-            [
-                syn::parse_quote! { #ty: #recallable_trait },
-                syn::parse_quote! { #ty::Memento: ::core::convert::From<#ty> },
-            ]
-        })
-        .collect();
-    bounds.extend(collect_shared_memento_bounds_for_enum(ir, env));
-    bounds.extend(ir.whole_type_from_bounds(recallable_trait));
-    bounds
+    ir.extend_where_clause(
+        ir.recallable_params()
+            .flat_map(|ty| -> [WherePredicate; 2] {
+                [
+                    syn::parse_quote! { #ty: #recallable_trait },
+                    syn::parse_quote! { #ty::Memento: ::core::convert::From<#ty> },
+                ]
+            })
+            .chain(collect_shared_memento_bounds_for_enum(ir, env).into_iter())
+            .chain(ir.whole_type_from_bounds(recallable_trait)),
+    )
 }
