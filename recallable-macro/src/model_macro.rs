@@ -13,34 +13,27 @@ const SERDE_DERIVE: &str = "serde_derive";
 
 #[must_use]
 pub(super) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
-    expand_tokens(attr.into(), item.into()).into()
+    match expand_tokens(attr.into(), item.into()) {
+        Ok(ts) => ts.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
 }
 
-#[must_use]
-fn expand_tokens(attr: TokenStream2, item: TokenStream2) -> TokenStream2 {
-    if let Err(err) = validate_model_attr(&attr) {
-        return err.to_compile_error().into();
-    }
-
-    let mut model_item = match parse_model_item_tokens(item) {
-        Ok(item) => item,
-        Err(e) => return e.to_compile_error().into(),
-    };
+fn expand_tokens(attr: TokenStream2, item: TokenStream2) -> syn::Result<TokenStream2> {
+    validate_model_attr(&attr)?;
+    let mut model_item = parse_model_item_tokens(item)?;
     let derive_input = model_item.parse();
-    if let Err(e) = context::analyze_model_input(&derive_input) {
-        return e.to_compile_error().into();
-    }
-    if SERDE_ENABLED && let Err(e) = check_no_serialize_derive(model_item.attrs()) {
-        return e.to_compile_error().into();
+    context::analyze_model_input(&derive_input)?;
+    if SERDE_ENABLED {
+        check_no_serialize_derive(model_item.attrs())?;
     }
 
     model_item.add_derives();
-
     if SERDE_ENABLED {
         model_item.add_serde_skip_attrs();
     }
 
-    model_item.item_tokenstream()
+    Ok(model_item.item_tokenstream())
 }
 
 fn validate_model_attr(attr: &TokenStream2) -> syn::Result<()> {
@@ -183,7 +176,9 @@ mod tests {
     use quote::quote;
     use syn::parse_quote;
 
-    use super::{expand_tokens, is_serde_serialize_path, parse_model_item_tokens, validate_model_attr};
+    use super::{
+        expand_tokens, is_serde_serialize_path, parse_model_item_tokens, validate_model_attr,
+    };
 
     #[test]
     fn serde_serialize_path_detection_is_precise() {
@@ -234,24 +229,38 @@ mod tests {
     }
 
     #[test]
-    fn expand_returns_compile_error_for_model_arguments() {
-        let tokens = expand_tokens(quote!(unexpected), quote!(struct Example;)).to_string();
+    fn expand_tokens_reject_model_arguments() {
+        let error = expand_tokens(
+            quote!(unexpected),
+            quote!(
+                struct Example;
+            ),
+        )
+        .unwrap_err();
 
-        assert!(tokens.contains("compile_error"));
-        assert!(tokens.contains("does not accept arguments"));
+        assert!(error.to_string().contains("does not accept arguments"));
     }
 
     #[test]
-    fn expand_returns_compile_error_for_non_model_items() {
-        let tokens = expand_tokens(quote!(), quote!(fn example() {})).to_string();
+    fn expand_tokens_reject_non_model_items() {
+        let error = expand_tokens(
+            quote!(),
+            quote!(
+                fn example() {}
+            ),
+        )
+        .unwrap_err();
 
-        assert!(tokens.contains("compile_error"));
-        assert!(tokens.contains("can only be applied to structs or enums"));
+        assert!(
+            error
+                .to_string()
+                .contains("can only be applied to structs or enums")
+        );
     }
 
     #[test]
-    fn expand_returns_compile_error_for_model_analysis_failures() {
-        let tokens = expand_tokens(
+    fn expand_tokens_reject_model_analysis_failures() {
+        let error = expand_tokens(
             quote!(),
             quote! {
                 enum Example {
@@ -259,16 +268,15 @@ mod tests {
                 }
             },
         )
-        .to_string();
+        .unwrap_err();
 
-        assert!(tokens.contains("compile_error"));
-        assert!(tokens.contains("assignment-only variants"));
+        assert!(error.to_string().contains("assignment-only variants"));
     }
 
     #[cfg(feature = "serde")]
     #[test]
-    fn expand_returns_compile_error_for_manual_serialize_derives() {
-        let tokens = expand_tokens(
+    fn expand_tokens_reject_manual_serialize_derives() {
+        let error = expand_tokens(
             quote!(),
             quote! {
                 #[derive(serde::Serialize)]
@@ -277,9 +285,8 @@ mod tests {
                 }
             },
         )
-        .to_string();
+        .unwrap_err();
 
-        assert!(tokens.contains("compile_error"));
-        assert!(tokens.contains("already derives"));
+        assert!(error.to_string().contains("already derives"));
     }
 }
