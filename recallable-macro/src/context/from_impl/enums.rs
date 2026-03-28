@@ -1,11 +1,11 @@
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{ToTokens, format_ident, quote};
+use quote::{ToTokens, quote};
 use syn::WherePredicate;
 
 use crate::context::internal::enums::{
-    EnumIr, VariantIr, VariantShape, collect_shared_memento_bounds_for_enum,
+    EnumIr, VariantIr, VariantShape, build_binding_ident, collect_shared_memento_bounds_for_enum,
 };
-use crate::context::internal::shared::{CodegenEnv, FieldIr, FieldMember, FieldStrategy};
+use crate::context::internal::shared::{CodegenEnv, FieldIr, FieldStrategy};
 
 #[must_use]
 pub(crate) fn gen_enum_from_impl(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 {
@@ -83,13 +83,6 @@ fn build_binding_pattern(field: &FieldIr<'_>, index: usize) -> TokenStream2 {
         quote! { _ }
     } else {
         build_binding_ident(field, index).to_token_stream()
-    }
-}
-
-fn build_binding_ident(field: &FieldIr<'_>, index: usize) -> syn::Ident {
-    match &field.member {
-        FieldMember::Named(name) => (*name).clone(),
-        FieldMember::Unnamed(_) => format_ident!("__recallable_field_{index}"),
     }
 }
 
