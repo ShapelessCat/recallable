@@ -4,6 +4,7 @@ use recallable::{Recall, Recallable};
 
 #[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
 enum AssignmentOnlyEnum<T, const N: usize> {
+    #[allow(dead_code)]
     Idle,
     Loading(T),
     Ready {

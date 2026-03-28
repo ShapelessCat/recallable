@@ -8,6 +8,7 @@ struct GenericInner<T> {
     value: T,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, recallable::Recallable)]
 enum NestedEnum<T> {
     Idle,
@@ -17,6 +18,7 @@ enum NestedEnum<T> {
     },
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, recallable::Recallable)]
 enum SkippedEnum<'a> {
     Idle,
@@ -27,6 +29,7 @@ enum SkippedEnum<'a> {
     },
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, recallable::Recallable)]
 enum PhantomEnum<'a, T> {
     Idle,
@@ -36,6 +39,7 @@ enum PhantomEnum<'a, T> {
     },
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, recallable::Recallable)]
 enum BoundDependentEnum<T: From<U>, U> {
     Value {
@@ -45,6 +49,7 @@ enum BoundDependentEnum<T: From<U>, U> {
     },
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, recallable::Recallable)]
 enum SkippedGenericEnum<T, U> {
     Value(T),
