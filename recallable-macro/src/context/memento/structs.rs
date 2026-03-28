@@ -18,6 +18,7 @@ pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv) -> TokenStream
     let body = build_memento_body(ir, env);
 
     quote! {
+        #[allow(dead_code)]
         #derives
         #visibility struct #memento_name #memento_generics #body
     }
