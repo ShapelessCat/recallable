@@ -73,16 +73,13 @@ fn gen_enum_restore_helper(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 {
     }
 }
 
-fn build_variant_memento_pattern(variant: &VariantIr<'_>) -> TokenStream2 {
+fn build_variant_memento_pattern(variant: &VariantIr<'_>) -> Option<TokenStream2> {
     let mut bindings = variant.kept_bindings().peekable();
-    if bindings.peek().is_none() {
-        return quote! {};
-    }
-
     match variant.shape {
-        VariantShape::Named => quote! { { #(#bindings),* } },
-        VariantShape::Unnamed => quote! { ( #(#bindings),* ) },
-        VariantShape::Unit => quote! {},
+        VariantShape::Unit => None,
+        _ if bindings.peek().is_none() => None,
+        VariantShape::Named => Some(quote! { { #(#bindings),* } }),
+        VariantShape::Unnamed => Some(quote! { ( #(#bindings),* ) }),
     }
 }
 
