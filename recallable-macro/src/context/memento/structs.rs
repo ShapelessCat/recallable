@@ -12,12 +12,15 @@ use crate::context::internal::structs::{StructIr, StructShape, collect_recall_li
 #[must_use]
 pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv) -> TokenStream2 {
     let derives = ir.memento_trait_spec().derive_attr();
+    let marker_helpers = ir.synthetic_marker_helper_defs();
     let visibility = ir.visibility();
     let memento_name = ir.memento_name();
     let memento_generics = ir.memento_decl_generics();
     let body = build_memento_body(ir, env);
 
     quote! {
+        #(#marker_helpers)*
+
         #[automatically_derived]
         #[allow(dead_code)]
         #derives

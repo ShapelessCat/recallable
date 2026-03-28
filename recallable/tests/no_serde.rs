@@ -106,6 +106,16 @@ where
 }
 
 #[derive(recallable::Recallable, recallable::Recall)]
+struct ConstBoundOuter<T, const N: usize>
+where
+    T: Clone + core::fmt::Debug + PartialEq + From<ConstTag<N>>,
+{
+    value: T,
+    #[recallable(skip)]
+    marker: PhantomData<ConstTag<N>>,
+}
+
+#[derive(recallable::Recallable, recallable::Recall)]
 struct ConcretePredicateOuter<T>
 where
     T: Clone + core::fmt::Debug + PartialEq,
@@ -153,6 +163,15 @@ struct AssocPathOuter {
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 struct ConstTag<const N: usize> {
     value: usize,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct GenericConstValue;
+
+impl<const N: usize> From<ConstTag<N>> for GenericConstValue {
+    fn from(_: ConstTag<N>) -> Self {
+        Self
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
@@ -295,12 +314,28 @@ fn test_bound_dependencies_keep_other_generic_params_retained() {
 #[test]
 fn test_bound_dependencies_keep_lifetimes_on_memento_types() {
     // Regression: the retained where-clause lifetime `'a` must stay on the generated
-    // memento type, or this derive input stops compiling because `T: From<&'a str>`
-    // would mention an undeclared lifetime in the generated bounds.
+    // memento type, and the skipped field means the synthetic marker must mention it
+    // using the lifetime branch of `marker_component`.
     let _: fn(
         &mut LifetimeBoundOuter<'static, String>,
         <LifetimeBoundOuter<'static, String> as recallable::Recallable>::Memento,
     ) = <LifetimeBoundOuter<'static, String> as recallable::Recall>::recall;
+}
+
+#[test]
+fn test_bound_dependencies_keep_const_params_on_memento_types() {
+    // Regression: the retained const param `N` only survives via the skipped field,
+    // so the synthetic marker must mention it using the const branch of
+    // `marker_component`.
+    let _: fn(
+        &mut ConstBoundOuter<GenericConstValue, 2>,
+        <ConstBoundOuter<GenericConstValue, 2> as recallable::Recallable>::Memento,
+    ) = <ConstBoundOuter<GenericConstValue, 2> as recallable::Recall>::recall;
+
+    type Left = <ConstBoundOuter<GenericConstValue, 1> as recallable::Recallable>::Memento;
+    type Right = <ConstBoundOuter<GenericConstValue, 2> as recallable::Recallable>::Memento;
+
+    assert_ne!(TypeId::of::<Left>(), TypeId::of::<Right>());
 }
 
 #[test]

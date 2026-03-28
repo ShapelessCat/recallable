@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
-use syn::{Generics, Ident, Type, WhereClause, WherePredicate};
+use quote::{format_ident, quote};
+use syn::{GenericParam, Generics, Ident, Type, WhereClause, WherePredicate};
 
 use super::fields::{FieldIr, FieldMember, FieldStrategy};
 use super::generics::{GenericParamPlan, is_generic_type_param, marker_component};
@@ -68,6 +68,12 @@ pub(crate) trait CodegenItemIr<'a> {
         Some(quote! {
             ::core::marker::PhantomData<(#(#components,)*)>
         })
+    }
+
+    fn synthetic_marker_helper_defs(&self) -> impl Iterator<Item = TokenStream2> + '_ {
+        self.marker_param_indices()
+            .iter()
+            .filter_map(|&index| const_marker_helper_def(self.generic_params()[index].param))
     }
 
     fn recallable_params<'b>(&'b self) -> impl Iterator<Item = &'a Ident> + 'b
@@ -174,6 +180,25 @@ pub(crate) trait CodegenItemIr<'a> {
 
             where_clause
         }
+    }
+}
+
+fn const_marker_helper_ident(ident: &Ident) -> Ident {
+    format_ident!("__RecallableConstMarker_{ident}")
+}
+
+fn const_marker_helper_def(param: &GenericParam) -> Option<TokenStream2> {
+    match param {
+        GenericParam::Const(param) => {
+            let helper_ident = const_marker_helper_ident(&param.ident);
+            let ty = &param.ty;
+
+            Some(quote! {
+                #[doc(hidden)]
+                struct #helper_ident<const VALUE: #ty>;
+            })
+        }
+        _ => None,
     }
 }
 

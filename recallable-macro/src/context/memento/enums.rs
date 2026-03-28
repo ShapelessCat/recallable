@@ -15,6 +15,7 @@ use crate::context::internal::shared::{
 #[must_use]
 pub(crate) fn gen_memento_enum(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 {
     let derives = ir.memento_trait_spec().derive_attr();
+    let marker_helpers = ir.synthetic_marker_helper_defs();
     let visibility = ir.visibility();
     let memento_name = ir.memento_name();
     let memento_generics = ir.memento_decl_generics();
@@ -35,6 +36,8 @@ pub(crate) fn gen_memento_enum(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 {
         );
 
     quote! {
+        #(#marker_helpers)*
+
         #[automatically_derived]
         #[allow(dead_code)]
         #derives
