@@ -31,7 +31,6 @@ fn test_assignment_only_enum_recall_switches_to_named_variant() {
     state.recall(AssignmentOnlyMemento::Ready {
         bytes: [4, 5],
         version: 9,
-        marker: PhantomData,
     });
     assert_eq!(
         state,

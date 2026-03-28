@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use proc_macro2::TokenStream as TokenStream2;
 use quote::ToTokens;
 use syn::{Field, Ident, Index, Meta, PathArguments, Type};
@@ -7,7 +5,7 @@ use syn::{Field, Ident, Index, Meta, PathArguments, Type};
 use super::generics::{
     BareTypeParam, GenericParamLookup, GenericUsage, collect_generic_dependencies_in_type,
 };
-use super::lifetime::{field_uses_struct_lifetime, is_phantom_data};
+use super::lifetime::is_phantom_data;
 use super::util::is_recallable_attr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,7 +123,6 @@ fn classify_recallable_field_type(
 
 pub(crate) fn collect_field_irs<'a>(
     fields: &'a syn::Fields,
-    struct_lifetimes: &HashSet<&'a syn::Ident>,
     generic_lookup: &GenericParamLookup<'a>,
 ) -> syn::Result<(GenericUsage, Vec<FieldIr<'a>>)> {
     let mut usage = GenericUsage::default();
@@ -136,7 +133,7 @@ pub(crate) fn collect_field_irs<'a>(
         let member = field_member(field, index);
         let ty = &field.ty;
 
-        if is_phantom_data(ty) && field_uses_struct_lifetime(ty, struct_lifetimes) {
+        if is_phantom_data(ty) {
             field_irs.push(FieldIr {
                 source: field,
                 memento_index: None,
@@ -193,7 +190,9 @@ pub(crate) fn has_recallable_skip_attr(field: &Field) -> bool {
 mod tests {
     use syn::parse_quote;
 
-    use super::{GenericParamLookup, classify_recallable_field_type};
+    use super::{
+        FieldStrategy, GenericParamLookup, classify_recallable_field_type, collect_field_irs,
+    };
 
     #[test]
     fn recallable_type_classifier_accepts_any_path_type() {
@@ -214,5 +213,25 @@ mod tests {
             classify_recallable_field_type(&field.ty, &lookup),
             Ok(None)
         ));
+    }
+
+    #[test]
+    fn phantom_data_fields_are_always_skipped() {
+        let input: syn::DeriveInput = parse_quote! {
+            struct Example<T> {
+                marker: ::core::marker::PhantomData<T>,
+                value: u8,
+            }
+        };
+        let fields = match &input.data {
+            syn::Data::Struct(data) => &data.fields,
+            _ => unreachable!(),
+        };
+        let lookup = GenericParamLookup::new(&input.generics);
+
+        let (_, field_irs) = collect_field_irs(fields, &lookup).unwrap();
+
+        assert_eq!(field_irs[0].strategy, FieldStrategy::Skip);
+        assert_eq!(field_irs[1].strategy, FieldStrategy::StoreAsSelf);
     }
 }

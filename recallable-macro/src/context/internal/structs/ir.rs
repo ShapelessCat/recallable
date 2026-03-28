@@ -73,7 +73,7 @@ impl<'a> StructIr<'a> {
             .type_params()
             .map(|param| &param.ident)
             .collect();
-        let (usage, field_irs) = collect_field_irs(fields, &struct_lifetimes, &generic_lookup)?;
+        let (usage, field_irs) = collect_field_irs(fields, &generic_lookup)?;
         let (generic_params, memento_where_clause) =
             plan_memento_generics(&input.generics, usage, &generic_lookup);
         let marker_param_indices =
