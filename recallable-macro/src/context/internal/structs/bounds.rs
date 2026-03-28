@@ -29,7 +29,9 @@ fn collect_shared_memento_bounds_with_spec(
     let recallable_trait = &env.recallable_trait;
     let memento_trait_bounds = memento_trait_spec.common_bound_tokens();
 
-    let mut bounds = ir.recallable_memento_bounds(&memento_trait_bounds);
+    let mut bounds = ir
+        .recallable_memento_bounds(&memento_trait_bounds)
+        .collect::<Vec<_>>();
     bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &memento_trait_bounds));
     if let Some(deserialize_owned) = memento_trait_spec.serde_nested_bound() {
         bounds.extend(ir.whole_type_memento_bounds(recallable_trait, &deserialize_owned));
@@ -48,7 +50,7 @@ fn collect_recall_like_bounds_with_spec(
         collect_shared_memento_bounds_with_spec(ir, env, memento_trait_spec);
     let shared_param_bound_count = ir.recallable_params().count();
 
-    let mut bounds = ir.recallable_bounds(direct_bound);
+    let mut bounds = ir.recallable_bounds(direct_bound).collect::<Vec<_>>();
     bounds.extend(
         shared_memento_bounds
             .iter()
@@ -160,7 +162,6 @@ mod tests {
 
         let whole_type_bounds: Vec<_> = ir
             .whole_type_bounds(&env.recallable_trait)
-            .into_iter()
             .map(|predicate| predicate.to_token_stream().to_string())
             .collect();
         assert_eq!(
