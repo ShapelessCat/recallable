@@ -39,3 +39,24 @@ impl<'a> ItemIr<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use syn::parse_quote;
+
+    use super::has_skip_memento_default_derives;
+
+    #[test]
+    fn struct_level_unknown_recallable_parameter_is_rejected() {
+        let input: syn::DeriveInput = parse_quote! {
+            #[recallable(unknown)]
+            struct Example {
+                value: u32,
+            }
+        };
+
+        let error = has_skip_memento_default_derives(&input).unwrap_err();
+
+        assert_eq!(error.to_string(), "unrecognized `recallable` parameter");
+    }
+}
