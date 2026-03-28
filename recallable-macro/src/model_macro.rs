@@ -13,19 +13,20 @@ const SERDE_DERIVE: &str = "serde_derive";
 
 #[must_use]
 pub(super) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let attr_tokens: TokenStream2 = attr.into();
-    if let Err(err) = validate_model_attr(&attr_tokens) {
+    expand_tokens(attr.into(), item.into()).into()
+}
+
+#[must_use]
+fn expand_tokens(attr: TokenStream2, item: TokenStream2) -> TokenStream2 {
+    if let Err(err) = validate_model_attr(&attr) {
         return err.to_compile_error().into();
     }
 
-    let mut model_item = match parse_model_item(item) {
+    let mut model_item = match parse_model_item_tokens(item) {
         Ok(item) => item,
         Err(e) => return e.to_compile_error().into(),
     };
-    let derive_input: syn::DeriveInput = match model_item.parse() {
-        Ok(input) => input,
-        Err(e) => return e.to_compile_error().into(),
-    };
+    let derive_input = model_item.parse();
     if let Err(e) = context::analyze_model_input(&derive_input) {
         return e.to_compile_error().into();
     }
@@ -39,7 +40,7 @@ pub(super) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         model_item.add_serde_skip_attrs();
     }
 
-    model_item.item_tokenstream().into()
+    model_item.item_tokenstream()
 }
 
 fn validate_model_attr(attr: &TokenStream2) -> syn::Result<()> {
@@ -66,8 +67,8 @@ fn build_model_derive_attr(crate_path: &TokenStream2) -> syn::Attribute {
     }
 }
 
-fn parse_model_item(item: TokenStream) -> syn::Result<ModelItem> {
-    let item: Item = syn::parse(item)?;
+fn parse_model_item_tokens(item: TokenStream2) -> syn::Result<ModelItem> {
+    let item: Item = syn::parse2(item)?;
     match item {
         Item::Struct(item) => Ok(ModelItem::Struct(item)),
         Item::Enum(item) => Ok(ModelItem::Enum(item)),
@@ -169,11 +170,11 @@ impl ModelItem {
         }
     }
 
-    fn parse(&self) -> syn::Result<syn::DeriveInput> {
-        Ok(match self {
+    fn parse(&self) -> syn::DeriveInput {
+        match self {
             ModelItem::Struct(item) => item.clone().into(),
             ModelItem::Enum(item) => item.clone().into(),
-        })
+        }
     }
 }
 
@@ -182,7 +183,7 @@ mod tests {
     use quote::quote;
     use syn::parse_quote;
 
-    use super::{is_serde_serialize_path, validate_model_attr};
+    use super::{expand_tokens, is_serde_serialize_path, parse_model_item_tokens, validate_model_attr};
 
     #[test]
     fn serde_serialize_path_detection_is_precise() {
@@ -215,5 +216,70 @@ mod tests {
                 .to_string()
                 .contains("`#[recallable_model]` does not accept arguments")
         );
+    }
+
+    #[test]
+    fn parse_model_item_rejects_non_struct_or_enum_items() {
+        let error = match parse_model_item_tokens(quote!(
+            fn example() {}
+        )) {
+            Ok(_) => panic!("expected parse_model_item to reject functions"),
+            Err(error) => error,
+        };
+
+        assert_eq!(
+            error.to_string(),
+            "`#[recallable_model]` can only be applied to structs or enums"
+        );
+    }
+
+    #[test]
+    fn expand_returns_compile_error_for_model_arguments() {
+        let tokens = expand_tokens(quote!(unexpected), quote!(struct Example;)).to_string();
+
+        assert!(tokens.contains("compile_error"));
+        assert!(tokens.contains("does not accept arguments"));
+    }
+
+    #[test]
+    fn expand_returns_compile_error_for_non_model_items() {
+        let tokens = expand_tokens(quote!(), quote!(fn example() {})).to_string();
+
+        assert!(tokens.contains("compile_error"));
+        assert!(tokens.contains("can only be applied to structs or enums"));
+    }
+
+    #[test]
+    fn expand_returns_compile_error_for_model_analysis_failures() {
+        let tokens = expand_tokens(
+            quote!(),
+            quote! {
+                enum Example {
+                    Value(#[recallable] Inner),
+                }
+            },
+        )
+        .to_string();
+
+        assert!(tokens.contains("compile_error"));
+        assert!(tokens.contains("assignment-only variants"));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn expand_returns_compile_error_for_manual_serialize_derives() {
+        let tokens = expand_tokens(
+            quote!(),
+            quote! {
+                #[derive(serde::Serialize)]
+                struct Example {
+                    value: u32,
+                }
+            },
+        )
+        .to_string();
+
+        assert!(tokens.contains("compile_error"));
+        assert!(tokens.contains("already derives"));
     }
 }
