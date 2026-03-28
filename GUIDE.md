@@ -395,6 +395,66 @@ Generated mementos are intentionally somewhat opaque:
 This design pushes callers toward "construct or deserialize a memento, then
 apply it" instead of depending on widened field visibility.
 
+### Skipped `PhantomData` and retained generics
+
+Most skipped fields simply disappear from the generated memento. The tricky case
+is when a skipped `PhantomData<_>` is the only field mentioning a generic that
+still must remain part of the memento type.
+
+```rust
+use core::any::TypeId;
+use core::marker::PhantomData;
+use recallable::Recallable;
+
+#[derive(Recallable)]
+struct BoundDependent<T: From<U>, U> {
+    value: T,
+    #[recallable(skip)]
+    marker: PhantomData<U>,
+}
+
+type Left = <BoundDependent<String, &'static str> as Recallable>::Memento;
+type Right = <BoundDependent<String, String> as Recallable>::Memento;
+
+assert_ne!(TypeId::of::<Left>(), TypeId::of::<Right>());
+```
+
+Why this needs a hidden marker:
+
+- the skipped field means there is no visible memento field of type `U`
+- `U` still matters, because the retained generic `T` depends on it through
+  `T: From<U>`
+- the generated memento type therefore needs to keep `U` alive internally
+
+The derive handles that by synthesizing an internal `PhantomData` marker on the
+generated memento.
+
+If a skipped generic is otherwise unused, the derive prunes it instead of
+preserving it:
+
+```rust
+use core::any::TypeId;
+use core::marker::PhantomData;
+use recallable::Recallable;
+
+#[derive(Recallable)]
+enum SkippedGenericEnum<T, U> {
+    Value(T),
+    Marker(#[recallable(skip)] PhantomData<U>),
+}
+
+type Left = <SkippedGenericEnum<u8, u16> as Recallable>::Memento;
+type Right = <SkippedGenericEnum<u8, u32> as Recallable>::Memento;
+
+assert_eq!(TypeId::of::<Left>(), TypeId::of::<Right>());
+```
+
+So the rule is:
+
+- if a skipped generic is no longer needed, the memento drops it
+- if it is still needed by retained generics or bounds, the derive keeps it via
+  an internal hidden marker
+
 ## Recursive fields and container-defined semantics
 
 Mark a field with `#[recallable]` when that field should use its own
