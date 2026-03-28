@@ -20,6 +20,15 @@ enum NestedEnum<T> {
 
 #[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, recallable::Recallable)]
+enum BareGenericEnum<T> {
+    Ready {
+        #[recallable]
+        inner: T,
+    },
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq, recallable::Recallable)]
 enum SkippedEnum<'a> {
     Idle,
     Borrowed {
@@ -95,4 +104,14 @@ fn test_enum_memento_prunes_skipped_generic_params() {
 fn test_enum_from_impl_is_generated_for_recallable_only_enums() {
     let _: fn(NestedEnum<u32>) -> <NestedEnum<u32> as Recallable>::Memento =
         ::core::convert::From::from;
+}
+
+#[cfg(feature = "impl_from")]
+#[test]
+fn test_enum_from_impl_supports_bare_generic_recallable_fields() {
+    let original = BareGenericEnum::Ready {
+        inner: GenericInner { value: 42_u32 },
+    };
+
+    let _: <BareGenericEnum<GenericInner<u32>> as Recallable>::Memento = original.into();
 }
