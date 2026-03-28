@@ -18,7 +18,7 @@ pub(crate) fn has_skip_memento_default_derives(input: &DeriveInput) -> syn::Resu
                 skip_memento_default_derives = true;
                 Ok(())
             } else if meta.path.is_ident("skip") {
-                Err(meta.error("`skip` is a field-level attribute, not a struct-level attribute"))
+                Err(meta.error("`skip` is a field-level attribute, not an item-level attribute"))
             } else {
                 Err(meta.error("unrecognized `recallable` parameter"))
             }
@@ -47,7 +47,7 @@ mod tests {
     use super::has_skip_memento_default_derives;
 
     #[test]
-    fn struct_level_unknown_recallable_parameter_is_rejected() {
+    fn item_level_unknown_recallable_parameter_is_rejected() {
         let input: syn::DeriveInput = parse_quote! {
             #[recallable(unknown)]
             struct Example {
@@ -58,5 +58,22 @@ mod tests {
         let error = has_skip_memento_default_derives(&input).unwrap_err();
 
         assert_eq!(error.to_string(), "unrecognized `recallable` parameter");
+    }
+
+    #[test]
+    fn item_level_skip_parameter_is_rejected() {
+        let input: syn::DeriveInput = parse_quote! {
+            #[recallable(skip)]
+            enum Example {
+                Value(u32),
+            }
+        };
+
+        let error = has_skip_memento_default_derives(&input).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "`skip` is a field-level attribute, not an item-level attribute"
+        );
     }
 }
