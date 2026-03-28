@@ -39,7 +39,7 @@ fn build_from_body(ir: &StructIr) -> TokenStream2 {
     match ir.shape() {
         StructShape::Named => build_named_from_body(ir),
         StructShape::Unnamed => build_unnamed_from_body(ir),
-        StructShape::Unit => build_unit_from_body(ir),
+        StructShape::Unit => quote! { Self },
     }
 }
 
@@ -65,14 +65,6 @@ fn build_unnamed_from_body(ir: &StructIr) -> TokenStream2 {
         .chain(ir.has_synthetic_marker().then(build_marker_init));
 
     quote! { Self(#(#values),*) }
-}
-
-fn build_unit_from_body(ir: &StructIr) -> TokenStream2 {
-    if ir.has_synthetic_marker() {
-        quote! { Self { _recallable_marker: ::core::marker::PhantomData } }
-    } else {
-        quote! { Self }
-    }
 }
 
 fn build_marker_init() -> TokenStream2 {

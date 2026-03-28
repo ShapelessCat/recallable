@@ -134,11 +134,7 @@ impl<'a> StructIr<'a> {
 
     #[must_use]
     pub(crate) fn generated_memento_shape(&self) -> StructShape {
-        if self.shape == StructShape::Unit && self.has_synthetic_marker() {
-            StructShape::Named
-        } else {
-            self.shape
-        }
+        self.shape
     }
 
     #[must_use]
@@ -180,5 +176,25 @@ impl<'a> CodegenItemIr<'a> for StructIr<'a> {
 
     fn all_fields(&self) -> Self::Fields<'_> {
         self.fields.iter()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use syn::parse_quote;
+
+    use super::{StructIr, StructShape};
+
+    #[test]
+    fn unit_structs_never_need_synthetic_markers() {
+        let input: syn::DeriveInput = parse_quote! {
+            struct Example<'a, T: From<U>, U, const N: usize>;
+        };
+
+        let ir = StructIr::analyze(&input).unwrap();
+
+        assert_eq!(ir.shape(), StructShape::Unit);
+        assert_eq!(ir.generated_memento_shape(), StructShape::Unit);
+        assert!(!ir.has_synthetic_marker());
     }
 }

@@ -28,6 +28,13 @@ enum BareGenericEnum<T> {
 }
 
 #[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+enum UnitVariantEnum {
+    Idle,
+    Value(u8),
+}
+
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, recallable::Recallable)]
 enum SkippedEnum<'a> {
     Idle,
@@ -114,4 +121,15 @@ fn test_enum_from_impl_supports_bare_generic_recallable_fields() {
     };
 
     let _: <BareGenericEnum<GenericInner<u32>> as Recallable>::Memento = original.into();
+}
+
+#[cfg(feature = "impl_from")]
+#[test]
+fn test_enum_from_impl_preserves_unit_variants() {
+    let original = UnitVariantEnum::Idle;
+    let memento: <UnitVariantEnum as Recallable>::Memento = original.clone().into();
+    let mut target = UnitVariantEnum::Value(7);
+
+    <UnitVariantEnum as recallable::Recall>::recall(&mut target, memento);
+    assert_eq!(target, original);
 }
