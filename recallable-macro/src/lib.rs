@@ -7,7 +7,8 @@
 //! - `#[recallable_model]`: injects `Recallable`/`Recall` derives for structs and
 //!   assignment-only enums; with the `serde` Cargo feature enabled for this macro
 //!   crate it also adds `serde::Serialize` and applies `#[serde(skip)]` to fields
-//!   marked `#[recallable(skip)]`. Complex enums should derive `Recallable` and
+//!   marked `#[recallable(skip)]`. Complex enums with nested `#[recallable]`
+//!   fields or non-marker skipped fields should derive `Recallable` and
 //!   implement `Recall` or `TryRecall` manually.
 //!
 //! - `#[derive(Recallable)]`: generates an internal companion memento type, exposes
@@ -16,7 +17,7 @@
 //!
 //! - `#[derive(Recall)]`: generates the `Recall` implementation, recursively
 //!   recalls struct fields annotated with `#[recallable]`, and supports enums only
-//!   when every variant field is assignment-only.
+//!   when every non-marker variant field is assignment-only.
 //!
 //! Feature flags are evaluated in the `recallable-macro` crate itself. See `context`
 //! for details about the generated memento struct and trait implementations.
@@ -38,8 +39,9 @@ mod model_macro;
 /// - For fields annotated with `#[recallable(skip)]`, it injects `#[serde(skip)]`
 ///   to keep serde output aligned with recall behavior.
 /// - This attribute itself takes no arguments.
-/// - Complex enums with nested `#[recallable]` or skipped fields are rejected so
-///   the caller can keep `Recall` or `TryRecall` explicit.
+/// - Complex enums with nested `#[recallable]` fields or non-marker skipped
+///   fields are rejected so the caller can keep `Recall` or `TryRecall`
+///   explicit.
 ///
 /// This macro preserves the original struct shape and only mutates attributes.
 ///
@@ -128,7 +130,8 @@ pub fn derive_recallable(input: TokenStream) -> TokenStream {
 ///
 /// For `#[recallable]` fields, replace/merge behavior comes from the field type's own
 /// `Recall` implementation.
-/// Enums are supported only when every variant field is assignment-only.
+/// Enums are supported only when every non-marker variant field is
+/// assignment-only.
 /// For supported enums, the generated implementation restores the target variant
 /// from the memento directly.
 pub fn derive_recall(input: TokenStream) -> TokenStream {

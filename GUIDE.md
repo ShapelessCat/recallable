@@ -258,8 +258,9 @@ With the default `serde` feature enabled, it also injects:
 Enum support is intentionally split:
 
 - assignment-only enums can use `#[recallable_model]` directly
-- enums with nested `#[recallable]` or `#[recallable(skip)]` fields should
-  derive `Recallable` and implement `Recall` or `TryRecall` manually
+- enums with skipped `PhantomData<_>` marker fields can also use it directly
+- enums with nested `#[recallable]` or other `#[recallable(skip)]` fields
+  should derive `Recallable` and implement `Recall` or `TryRecall` manually
 
 Example:
 
@@ -683,8 +684,9 @@ Generates the `Recall` implementation.
 Behavior:
 
 - struct fields are handled as before
-- enum derives are supported only for assignment-only variants
-- enums with nested `#[recallable]` or skipped fields should derive
+- enum derives are supported only for assignment-only variants, plus skipped
+  `PhantomData<_>` marker fields
+- enums with nested `#[recallable]` or other skipped fields should derive
   `Recallable` and implement `Recall` or `TryRecall` manually
 
 ### `#[recallable]`

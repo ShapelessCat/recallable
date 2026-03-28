@@ -100,8 +100,9 @@ For `no_std + serde` deployments, prefer a `no_std`-compatible format such as
 For enums, `#[recallable_model]` is intentionally narrower than `#[derive(Recallable)]`:
 
 - assignment-only enums are supported directly
-- enums with nested `#[recallable]` or `#[recallable(skip)]` fields should derive
-  `Recallable` and implement `Recall` or `TryRecall` manually
+- enums with skipped `PhantomData<_>` marker fields are still supported directly
+- enums with nested `#[recallable]` or other `#[recallable(skip)]` fields should
+  derive `Recallable` and implement `Recall` or `TryRecall` manually
 
 ## Features
 
@@ -232,9 +233,10 @@ impl Recall for EngineState {
 - Derive macros support structs and enums
 - `#[derive(Recallable)]` supports enums under the normal field rules
 - `#[derive(Recall)]` and `#[recallable_model]` support enums only when every
-  variant field is assignment-only
-- Enums with nested `#[recallable]` or `#[recallable(skip)]` fields should
-  derive `Recallable` and implement `Recall` or `TryRecall` manually
+  non-marker variant field is assignment-only
+- Enums with skipped `PhantomData<_>` marker fields are still supported
+- Enums with nested `#[recallable]` or other `#[recallable(skip)]` fields
+  should derive `Recallable` and implement `Recall` or `TryRecall` manually
 - Borrowed state fields are rejected unless they are skipped
 - `#[recallable]` is path-only: it supports type parameters, path types, and
   associated types, but not tuple/reference/slice/function syntax directly
