@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{ToTokens, quote};
+use quote::quote;
 use syn::WherePredicate;
 
 use crate::context::internal::enums::{
@@ -74,19 +74,11 @@ fn gen_enum_restore_helper(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 {
 fn build_variant_memento_pattern(variant: &VariantIr<'_>) -> TokenStream2 {
     match variant.shape {
         VariantShape::Named => {
-            let bindings = variant
-                .fields
-                .iter()
-                .enumerate()
-                .map(|(index, field)| build_binding_ident(field, index).to_token_stream());
+            let bindings = variant.bindings();
             quote! { { #(#bindings),* } }
         }
         VariantShape::Unnamed => {
-            let bindings = variant
-                .fields
-                .iter()
-                .enumerate()
-                .map(|(index, field)| build_binding_ident(field, index).to_token_stream());
+            let bindings = variant.bindings();
             quote! { ( #(#bindings),* ) }
         }
         VariantShape::Unit => quote! {},
@@ -98,7 +90,7 @@ fn build_variant_restore_expr(variant: &VariantIr<'_>, enum_name: &syn::Ident) -
 
     match variant.shape {
         VariantShape::Named => {
-            let inits = variant.fields.iter().enumerate().map(|(index, field)| {
+            let inits = variant.indexed_fields().map(|(index, field)| {
                 let member = &field.member;
                 let binding = build_binding_ident(field, index);
                 quote! { #member: #binding }
@@ -106,11 +98,7 @@ fn build_variant_restore_expr(variant: &VariantIr<'_>, enum_name: &syn::Ident) -
             quote! { #enum_name::#variant_name { #(#inits),* } }
         }
         VariantShape::Unnamed => {
-            let values = variant
-                .fields
-                .iter()
-                .enumerate()
-                .map(|(index, field)| build_binding_ident(field, index).to_token_stream());
+            let values = variant.bindings();
             quote! { #enum_name::#variant_name(#(#values),*) }
         }
         VariantShape::Unit => quote! { #enum_name::#variant_name },
