@@ -15,7 +15,7 @@ use crate::context::internal::shared::generics::{
 };
 use crate::context::internal::shared::item::has_skip_memento_default_derives;
 use crate::context::internal::shared::lifetime::{
-    collect_struct_lifetimes, validate_no_borrowed_fields,
+    collect_struct_lifetimes, is_phantom_data, validate_no_borrowed_fields,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,8 +42,8 @@ impl<'a> VariantIr<'a> {
             .filter(|(_, field)| !field.strategy.is_skip())
     }
 
-    pub(crate) fn bindings(&self) -> impl Iterator<Item = syn::Ident> + '_ {
-        self.indexed_fields()
+    pub(crate) fn kept_bindings(&self) -> impl Iterator<Item = syn::Ident> + '_ {
+        self.kept_fields()
             .map(|(index, field)| build_binding_ident(field, index))
     }
 }
@@ -89,7 +89,6 @@ fn extract_enum_variants(
 
 fn collect_variant_irs<'a>(
     variants: &'a syn::punctuated::Punctuated<syn::Variant, syn::Token![,]>,
-    struct_lifetimes: &HashSet<&'a syn::Ident>,
     generic_lookup: &GenericParamLookup<'a>,
 ) -> syn::Result<(
     crate::context::internal::shared::generics::GenericUsage,
@@ -99,8 +98,7 @@ fn collect_variant_irs<'a>(
     let mut variant_irs = Vec::with_capacity(variants.len());
 
     for variant in variants {
-        let (variant_usage, fields) =
-            collect_field_irs(&variant.fields, struct_lifetimes, generic_lookup)?;
+        let (variant_usage, fields) = collect_field_irs(&variant.fields, generic_lookup)?;
         usage.retained.extend(variant_usage.retained);
         usage
             .recallable_type_params
@@ -136,8 +134,7 @@ impl<'a> EnumIr<'a> {
             .type_params()
             .map(|param| &param.ident)
             .collect();
-        let (usage, variant_irs) =
-            collect_variant_irs(variants, &struct_lifetimes, &generic_lookup)?;
+        let (usage, variant_irs) = collect_variant_irs(variants, &generic_lookup)?;
         let (generic_params, memento_where_clause) =
             plan_memento_generics(&input.generics, usage, &generic_lookup);
         let marker_param_indices =
@@ -201,7 +198,10 @@ impl<'a> EnumIr<'a> {
         self.variants
             .iter()
             .flat_map(|variant| variant.fields.iter())
-            .find(|field| !matches!(field.strategy, FieldStrategy::StoreAsSelf))
+            .find(|field| {
+                !(matches!(field.strategy, FieldStrategy::StoreAsSelf)
+                    || (field.strategy.is_skip() && is_phantom_data(field.ty)))
+            })
     }
 
     pub(crate) fn supports_derived_recall(&self) -> bool {

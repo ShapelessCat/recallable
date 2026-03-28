@@ -65,6 +65,7 @@ fn test_try_recall_custom_error() {
 }
 
 mod phantom_lifetime {
+    use core::any::TypeId;
     use core::marker::PhantomData;
     use recallable::{Recall, Recallable};
 
@@ -86,6 +87,32 @@ mod phantom_lifetime {
         let memento = PhantomLifetimeMemento { value: 42 };
         s.recall(memento);
         assert_eq!(s.value, 42);
+    }
+
+    #[derive(Recallable, Recall)]
+    struct PhantomType<T> {
+        marker: PhantomData<T>,
+        value: u8,
+    }
+
+    type PhantomTypeLeft = <PhantomType<u8> as Recallable>::Memento;
+    type PhantomTypeRight = <PhantomType<u16> as Recallable>::Memento;
+
+    #[test]
+    fn test_phantom_type_is_auto_skipped_from_memento() {
+        let mut s = PhantomType::<u8> {
+            marker: PhantomData,
+            value: 10,
+        };
+        let memento = PhantomTypeLeft { value: 42 };
+
+        s.recall(memento);
+
+        assert_eq!(s.value, 42);
+        assert_eq!(
+            TypeId::of::<PhantomTypeLeft>(),
+            TypeId::of::<PhantomTypeRight>()
+        );
     }
 }
 

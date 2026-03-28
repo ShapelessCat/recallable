@@ -5,7 +5,8 @@ use syn::WherePredicate;
 use crate::context::internal::enums::{
     EnumIr, VariantIr, VariantShape, build_binding_ident, collect_recall_like_bounds_for_enum,
 };
-use crate::context::internal::shared::{CodegenEnv, CodegenItemIr};
+use crate::context::internal::shared::lifetime::is_phantom_data;
+use crate::context::internal::shared::{CodegenEnv, CodegenItemIr, FieldIr, FieldStrategy};
 
 #[must_use]
 pub(crate) fn gen_enum_recallable_impl(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 {
@@ -73,15 +74,14 @@ fn gen_enum_restore_helper(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 {
 }
 
 fn build_variant_memento_pattern(variant: &VariantIr<'_>) -> TokenStream2 {
+    let mut bindings = variant.kept_bindings().peekable();
+    if bindings.peek().is_none() {
+        return quote! {};
+    }
+
     match variant.shape {
-        VariantShape::Named => {
-            let bindings = variant.bindings();
-            quote! { { #(#bindings),* } }
-        }
-        VariantShape::Unnamed => {
-            let bindings = variant.bindings();
-            quote! { ( #(#bindings),* ) }
-        }
+        VariantShape::Named => quote! { { #(#bindings),* } },
+        VariantShape::Unnamed => quote! { ( #(#bindings),* ) },
         VariantShape::Unit => quote! {},
     }
 }
@@ -93,16 +93,31 @@ fn build_variant_restore_expr(variant: &VariantIr<'_>, enum_name: &syn::Ident) -
         VariantShape::Named => {
             let inits = variant.indexed_fields().map(|(index, field)| {
                 let member = &field.member;
-                let binding = build_binding_ident(field, index);
-                quote! { #member: #binding }
+                let value = build_variant_restore_value(field, index);
+                quote! { #member: #value }
             });
             quote! { #enum_name::#variant_name { #(#inits),* } }
         }
         VariantShape::Unnamed => {
-            let values = variant.bindings();
+            let values = variant
+                .indexed_fields()
+                .map(|(index, field)| build_variant_restore_value(field, index));
             quote! { #enum_name::#variant_name(#(#values),*) }
         }
         VariantShape::Unit => quote! { #enum_name::#variant_name },
+    }
+}
+
+fn build_variant_restore_value(field: &FieldIr<'_>, index: usize) -> TokenStream2 {
+    match field.strategy {
+        FieldStrategy::StoreAsSelf => {
+            let binding = build_binding_ident(field, index);
+            quote! { #binding }
+        }
+        FieldStrategy::Skip if is_phantom_data(field.ty) => quote! { ::core::marker::PhantomData },
+        FieldStrategy::StoreAsMemento | FieldStrategy::Skip => {
+            unreachable!("manual-only gating rejects non-phantom skipped and recallable fields")
+        }
     }
 }
 

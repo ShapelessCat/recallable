@@ -22,7 +22,6 @@ fn main() {
     let mut state = Example::<u8, 1>::Loading(1);
     state.recall(Memento::Ready {
         value: 2,
-        marker: PhantomData,
     });
 
     let _ = state;
