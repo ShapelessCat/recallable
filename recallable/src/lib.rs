@@ -31,8 +31,10 @@ extern crate self as recallable;
 /// Adds `#[derive(Recallable, Recall)]` automatically. When the `serde` feature is enabled,
 /// also derives `serde::Serialize` on the struct and injects `#[serde(skip)]` on fields
 /// marked with `#[recallable(skip)]`.
-/// Complex enums with nested `#[recallable]` or `#[recallable(skip)]` fields should
-/// derive [`Recallable`] and implement [`Recall`] or [`TryRecall`] manually.
+/// Complex enums with nested `#[recallable]` fields or non-marker
+/// `#[recallable(skip)]` fields should derive [`Recallable`] and implement
+/// [`Recall`] or [`TryRecall`] manually. Skipped `PhantomData<_>` marker fields
+/// remain supported on assignment-only enums.
 ///
 /// Lifetime parameters are supported only when the generated memento can stay owned:
 /// non-skipped fields may not borrow one of the struct's lifetimes. Skipped borrowed
@@ -72,9 +74,10 @@ pub use recallable_macro::recallable_model;
 /// Supports structs directly.
 /// Supports enums by generating an enum-shaped memento with matching variants.
 /// For enums, `#[derive(Recall)]` and `#[recallable_model]` are available only
-/// when every variant field is assignment-only.
-/// Enums with nested `#[recallable]` or `#[recallable(skip)]` fields can still
-/// derive [`Recallable`] and provide manual [`Recall`] or [`TryRecall`] behavior.
+/// when every non-marker variant field is assignment-only.
+/// Enums with nested `#[recallable]` fields or non-marker `#[recallable(skip)]`
+/// fields can still derive [`Recallable`] and provide manual [`Recall`] or
+/// [`TryRecall`] behavior.
 ///
 /// The memento struct mirrors the original but replaces `#[recallable]`-annotated fields
 /// with their `<FieldType as Recallable>::Memento` type and omits `#[recallable(skip)]` fields.
@@ -131,9 +134,10 @@ pub use recallable_macro::Recallable;
 /// Fields marked `#[recallable(skip)]` are left untouched.
 /// For `#[recallable]` fields, replace/merge behavior comes from the field type's own
 /// [`Recall`] implementation.
-/// Enums are supported only when every variant field is assignment-only.
-/// Enums with nested `#[recallable]` or skipped fields should derive
-/// [`Recallable`] and implement [`Recall`] or [`TryRecall`] manually.
+/// Enums are supported only when every non-marker variant field is
+/// assignment-only. Skipped `PhantomData<_>` marker fields are allowed.
+/// Enums with nested `#[recallable]` fields or other skipped fields should
+/// derive [`Recallable`] and implement [`Recall`] or [`TryRecall`] manually.
 /// For supported enums, the derived implementation restores the target variant
 /// from the memento directly.
 ///

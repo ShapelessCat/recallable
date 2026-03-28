@@ -18,6 +18,18 @@ enum AssignmentOnlyEnum<T, const N: usize> {
 
 type AssignmentOnlyMemento = <AssignmentOnlyEnum<u32, 2> as Recallable>::Memento;
 
+#[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+enum ExplicitSkippedPhantomEnum<T> {
+    Idle,
+    Ready {
+        #[recallable(skip)]
+        marker: PhantomData<T>,
+        value: u8,
+    },
+}
+
+type ExplicitSkippedPhantomMemento = <ExplicitSkippedPhantomEnum<u32> as Recallable>::Memento;
+
 #[test]
 fn test_assignment_only_enum_recall_switches_to_tuple_variant() {
     let mut state = AssignmentOnlyEnum::<u32, 2>::Idle;
@@ -38,6 +50,19 @@ fn test_assignment_only_enum_recall_switches_to_named_variant() {
             bytes: [4, 5],
             version: 9,
             marker: PhantomData,
+        }
+    );
+}
+
+#[test]
+fn test_assignment_only_enum_recall_accepts_explicit_skipped_phantom_field() {
+    let mut state = ExplicitSkippedPhantomEnum::<u32>::Idle;
+    state.recall(ExplicitSkippedPhantomMemento::Ready { value: 7 });
+    assert_eq!(
+        state,
+        ExplicitSkippedPhantomEnum::Ready {
+            marker: PhantomData,
+            value: 7,
         }
     );
 }
