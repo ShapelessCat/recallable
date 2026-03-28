@@ -5,7 +5,7 @@ use syn::{Ident, WhereClause, WherePredicate};
 
 use crate::context::SERDE_ENABLED;
 use crate::context::internal::shared::{
-    CodegenEnv, FieldIr, FieldMember, FieldStrategy, is_generic_type_param,
+    CodegenEnv, CodegenItemIr, FieldIr, build_memento_field_tokens,
 };
 use crate::context::internal::structs::{StructIr, StructShape, collect_recall_like_bounds};
 
@@ -92,22 +92,7 @@ fn build_memento_field(
     recallable_trait: &TokenStream2,
     generic_type_params: &HashSet<&Ident>,
 ) -> TokenStream2 {
-    let ty = field.ty;
-    let field_ty = match field.strategy {
-        FieldStrategy::StoreAsMemento => {
-            if is_generic_type_param(ty, generic_type_params) {
-                quote! { #ty::Memento }
-            } else {
-                quote! { <#ty as #recallable_trait>::Memento }
-            }
-        }
-        FieldStrategy::StoreAsSelf => quote! { #ty },
-        FieldStrategy::Skip => unreachable!("memento_fields() filters skipped fields"),
-    };
-    match &field.member {
-        FieldMember::Named(name) => quote! { #name: #field_ty },
-        FieldMember::Unnamed(_) => quote! { #field_ty },
-    }
+    build_memento_field_tokens(field, recallable_trait, generic_type_params)
 }
 
 #[cfg(test)]

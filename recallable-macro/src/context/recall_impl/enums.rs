@@ -2,7 +2,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
 use crate::context::internal::enums::{EnumIr, collect_recall_like_bounds_for_enum};
-use crate::context::internal::shared::CodegenEnv;
+use crate::context::internal::shared::{CodegenEnv, CodegenItemIr};
 
 #[must_use]
 pub(crate) fn gen_enum_recall_impl(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 {
