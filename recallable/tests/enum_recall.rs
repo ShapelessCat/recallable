@@ -1,3 +1,5 @@
+#![deny(dead_code)]
+
 use core::marker::PhantomData;
 
 use recallable::{Recall, Recallable};

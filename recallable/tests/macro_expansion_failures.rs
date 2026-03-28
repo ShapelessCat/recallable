@@ -18,6 +18,7 @@ fn derive_macro_reports_expected_failures() {
     tests.compile_fail("tests/ui/model_fail_enum_recallable_variant.rs");
     tests.compile_fail("tests/ui/model_fail_enum_skip_variant.rs");
     tests.pass("tests/ui/derive_pass_skip_memento_default_derives.rs");
+    tests.pass("tests/ui/derive_pass_enum_no_warnings.rs");
     #[cfg(feature = "serde")]
     {
         tests.compile_fail("tests/ui/model_fail_duplicate_serialize.rs");

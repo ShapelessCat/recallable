@@ -57,9 +57,12 @@ fn build_variant_source_pattern(variant: &VariantIr<'_>) -> TokenStream2 {
     match variant.shape {
         VariantShape::Named => {
             let patterns = variant.fields.iter().enumerate().map(|(index, field)| {
-                let member = &field.member;
-                let binding = build_binding_pattern(field, index);
-                quote! { #member: #binding }
+                if field.strategy.is_skip() {
+                    let member = &field.member;
+                    quote! { #member: _ }
+                } else {
+                    build_binding_ident(field, index).to_token_stream()
+                }
             });
             quote! { { #(#patterns),* } }
         }
