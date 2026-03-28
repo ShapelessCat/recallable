@@ -92,6 +92,33 @@ pub use recallable_macro::recallable_model;
 /// `From<Struct>` for the memento type, which requires
 /// `<FieldType as Recallable>::Memento: From<FieldType>` for each `#[recallable]` field.
 ///
+/// When a skipped field would otherwise remove the last field-level mention of a
+/// retained generic parameter, the derive keeps that generic alive with an
+/// internal `PhantomData` marker on the generated memento. This matters for
+/// cases like:
+///
+/// ```rust
+/// use core::any::TypeId;
+/// use core::marker::PhantomData;
+/// use recallable::Recallable;
+/// use std::string::String;
+///
+/// #[derive(Recallable)]
+/// struct BoundDependent<T: From<U>, U> {
+///     value: T,
+///     #[recallable(skip)]
+///     marker: PhantomData<U>,
+/// }
+///
+/// type Left = <BoundDependent<String, &'static str> as Recallable>::Memento;
+/// type Right = <BoundDependent<String, String> as Recallable>::Memento;
+///
+/// assert_ne!(TypeId::of::<Left>(), TypeId::of::<Right>());
+/// ```
+///
+/// Here `U` is not a visible memento field, but it still matters because the
+/// retained generic `T` depends on it through `T: From<U>`.
+///
 /// Lifetime parameters are supported only when the generated memento can stay owned:
 /// non-skipped fields may not borrow one of the struct's lifetimes. Skipped borrowed
 /// fields and lifetime-only markers such as `PhantomData<&'a T>` are allowed.

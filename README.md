@@ -104,6 +104,12 @@ For enums, `#[recallable_model]` is intentionally narrower than `#[derive(Recall
 - enums with nested `#[recallable]` or other `#[recallable(skip)]` fields should
   derive `Recallable` and implement `Recall` or `TryRecall` manually
 
+Skipped `PhantomData<_>` can also affect generic retention on generated
+mementos. When a skipped marker is the only field mentioning a generic that
+still must remain part of the memento type, the derive keeps that generic alive
+with an internal hidden marker. The user-facing examples for that corner case
+live in the API docs and [GUIDE.md](GUIDE.md).
+
 ## Features
 
 - `serde` (default): enables macro-generated serde support; generated mementos derive
