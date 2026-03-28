@@ -93,7 +93,7 @@ fn build_memento_field(
     generic_type_params: &HashSet<&Ident>,
 ) -> TokenStream2 {
     let ty = field.ty;
-    let field_ty = match &field.strategy {
+    let field_ty = match field.strategy {
         FieldStrategy::StoreAsMemento => {
             if is_generic_type_param(ty, generic_type_params) {
                 quote! { #ty::Memento }

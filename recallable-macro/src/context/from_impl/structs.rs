@@ -84,7 +84,7 @@ fn build_named_marker_init() -> TokenStream2 {
 
 fn build_from_expr(field: &FieldIr) -> TokenStream2 {
     let member = &field.member;
-    match &field.strategy {
+    match field.strategy {
         FieldStrategy::StoreAsSelf => quote! { value.#member },
         FieldStrategy::StoreAsMemento => {
             quote! { ::core::convert::From::from(value.#member) }
