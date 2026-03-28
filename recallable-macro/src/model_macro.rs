@@ -1,42 +1,15 @@
 use proc_macro::TokenStream;
 
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{ToTokens, quote};
+use quote::ToTokens;
 use syn::{Fields, Item, ItemEnum, ItemStruct, parse_quote};
 
 use crate::context::{self, SERDE_ENABLED, crate_path, has_recallable_skip_attr};
 
-enum ModelItem {
-    Struct(ItemStruct),
-    Enum(ItemEnum),
-}
-
-impl ModelItem {
-    fn attrs(&self) -> &[syn::Attribute] {
-        match self {
-            Self::Struct(item) => &item.attrs,
-            Self::Enum(item) => &item.attrs,
-        }
-    }
-
-    fn attrs_mut(&mut self) -> &mut Vec<syn::Attribute> {
-        match self {
-            Self::Struct(item) => &mut item.attrs,
-            Self::Enum(item) => &mut item.attrs,
-        }
-    }
-
-    fn add_serde_skip_attrs(&mut self) {
-        match self {
-            Self::Struct(item) => add_serde_skip_attrs_to_fields(&mut item.fields),
-            Self::Enum(item) => {
-                for variant in &mut item.variants {
-                    add_serde_skip_attrs_to_fields(&mut variant.fields);
-                }
-            }
-        }
-    }
-}
+const DERIVE: &str = "derive";
+const SERIALIZE: &str = "Serialize";
+const SERDE: &str = "serde";
+const SERDE_DERIVE: &str = "serde_derive";
 
 #[must_use]
 pub(super) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -45,20 +18,13 @@ pub(super) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         return err.to_compile_error().into();
     }
 
-    let crate_path = crate_path();
     let mut model_item = match parse_model_item(item) {
         Ok(item) => item,
         Err(e) => return e.to_compile_error().into(),
     };
-    let derive_input: syn::DeriveInput = match &model_item {
-        ModelItem::Struct(item) => match syn::parse2(item.to_token_stream()) {
-            Ok(input) => input,
-            Err(e) => return e.to_compile_error().into(),
-        },
-        ModelItem::Enum(item) => match syn::parse2(item.to_token_stream()) {
-            Ok(input) => input,
-            Err(e) => return e.to_compile_error().into(),
-        },
+    let derive_input: syn::DeriveInput = match model_item.parse() {
+        Ok(input) => input,
+        Err(e) => return e.to_compile_error().into(),
     };
     if let Err(e) = context::analyze_model_input(&derive_input) {
         return e.to_compile_error().into();
@@ -67,18 +33,13 @@ pub(super) fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         return e.to_compile_error().into();
     }
 
-    let derives = build_model_derive_attr(&crate_path);
-
-    model_item.attrs_mut().push(derives);
+    model_item.add_derives();
 
     if SERDE_ENABLED {
         model_item.add_serde_skip_attrs();
     }
 
-    match model_item {
-        ModelItem::Struct(item) => quote! { #item }.into(),
-        ModelItem::Enum(item) => quote! { #item }.into(),
-    }
+    model_item.item_tokenstream().into()
 }
 
 fn validate_model_attr(attr: &TokenStream2) -> syn::Result<()> {
@@ -131,37 +92,81 @@ fn add_serde_skip_attrs_to_fields(fields: &mut Fields) {
 /// Called only when `SERDE_ENABLED` is true, before `#[recallable_model]`
 /// injects its own `::serde::Serialize` derive.
 fn check_no_serialize_derive(attrs: &[syn::Attribute]) -> syn::Result<()> {
-    for attr in attrs {
-        if !attr.path().is_ident("derive") {
-            continue;
-        }
-        attr.parse_nested_meta(|meta| {
-            if is_serde_serialize_path(&meta.path) {
-                return Err(meta.error(
-                    "`#[recallable_model]` already derives `serde::Serialize` when the \
-                     `serde` feature is enabled — remove the manual `Serialize` derive",
-                ));
-            }
-            Ok(())
-        })?;
-    }
-    Ok(())
+    attrs
+        .iter()
+        .filter(|attr| attr.path().is_ident(DERIVE))
+        .try_for_each(|attr| {
+            attr.parse_nested_meta(|meta| {
+                if is_serde_serialize_path(&meta.path) {
+                    Err(meta.error(
+                        "`#[recallable_model]` already derives `serde::Serialize` when the \
+                         `serde` feature is enabled — remove the manual `Serialize` derive",
+                    ))
+                } else {
+                    Ok(())
+                }
+            })
+        })
 }
 
 fn is_serde_serialize_path(path: &syn::Path) -> bool {
-    if path.is_ident("Serialize") {
-        // Attribute macros cannot resolve imported names, so keep treating a bare
-        // `Serialize` derive as serde-shaped for the common `use serde::Serialize;` case.
-        return true;
+    // Attribute macros cannot resolve imported names, so keep treating a bare
+    // `Serialize` derive as serde-shaped for the common `use serde::Serialize;` case.
+    path.is_ident("Serialize") || {
+        let mut segments = path.segments.iter();
+        matches!(
+            (segments.next(), segments.next(), segments.next()),
+            (Some(first), Some(second), None)
+                if (first.ident == SERDE || first.ident == SERDE_DERIVE)
+                    && second.ident == SERIALIZE
+        )
+    }
+}
+
+enum ModelItem {
+    Struct(ItemStruct),
+    Enum(ItemEnum),
+}
+
+impl ModelItem {
+    fn attrs(&self) -> &[syn::Attribute] {
+        match self {
+            Self::Struct(item) => &item.attrs,
+            Self::Enum(item) => &item.attrs,
+        }
     }
 
-    let mut segments = path.segments.iter();
-    matches!(
-        (segments.next(), segments.next(), segments.next()),
-        (Some(first), Some(second), None)
-            if (first.ident == "serde" || first.ident == "serde_derive")
-                && second.ident == "Serialize"
-    )
+    fn add_derives(&mut self) {
+        let crate_path = crate_path();
+        let derives = build_model_derive_attr(&crate_path);
+        let attrs = match self {
+            Self::Struct(item) => &mut item.attrs,
+            Self::Enum(item) => &mut item.attrs,
+        };
+        attrs.push(derives);
+    }
+
+    fn add_serde_skip_attrs(&mut self) {
+        match self {
+            Self::Struct(item) => add_serde_skip_attrs_to_fields(&mut item.fields),
+            Self::Enum(item) => {
+                for variant in &mut item.variants {
+                    add_serde_skip_attrs_to_fields(&mut variant.fields);
+                }
+            }
+        }
+    }
+
+    fn item_tokenstream(&self) -> TokenStream2 {
+        match self {
+            ModelItem::Struct(item) => item.to_token_stream(),
+            ModelItem::Enum(item) => item.to_token_stream(),
+        }
+    }
+
+    fn parse(&self) -> syn::Result<syn::DeriveInput> {
+        syn::parse2(self.item_tokenstream())
+    }
 }
 
 #[cfg(test)]
