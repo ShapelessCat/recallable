@@ -208,16 +208,20 @@ impl<'a> StructIr<'a> {
         self.fields.iter().filter(|field| !field.strategy.is_skip())
     }
 
-    pub(crate) fn recallable_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
+    pub(crate) fn recallable_bounds(
+        &self,
+        bound: &TokenStream2,
+    ) -> impl Iterator<Item = WherePredicate> {
         self.recallable_params()
-            .map(|ty| syn::parse_quote! { #ty: #bound })
-            .collect()
+            .map(move |ty| syn::parse_quote! { #ty: #bound })
     }
 
-    pub(crate) fn recallable_memento_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
+    pub(crate) fn recallable_memento_bounds(
+        &self,
+        bound: &TokenStream2,
+    ) -> impl Iterator<Item = WherePredicate> {
         self.recallable_params()
-            .map(|ty| syn::parse_quote! { #ty::Memento: #bound })
-            .collect()
+            .map(move |ty| syn::parse_quote! { #ty::Memento: #bound })
     }
 
     fn whole_type_bound_targets(&self) -> impl Iterator<Item = &Type> {
@@ -236,11 +240,12 @@ impl<'a> StructIr<'a> {
             })
     }
 
-    #[must_use]
-    pub(crate) fn whole_type_bounds(&self, bound: &TokenStream2) -> Vec<WherePredicate> {
+    pub(crate) fn whole_type_bounds<'b>(
+        &'b self,
+        bound: &'b TokenStream2,
+    ) -> impl Iterator<Item = WherePredicate> + 'b {
         self.whole_type_bound_targets()
-            .map(|ty| syn::parse_quote! { #ty: #bound })
-            .collect()
+            .map(move |ty| syn::parse_quote! { #ty: #bound })
     }
 
     pub(crate) fn whole_type_memento_bounds(
