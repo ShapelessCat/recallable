@@ -51,12 +51,7 @@ fn build_memento_where_clause(ir: &EnumIr, env: &CodegenEnv) -> Option<WhereClau
         .unwrap_or(syn::parse_quote! { where });
     let bounded_types = collect_memento_bounds(ir, env);
     where_clause.predicates.extend(bounded_types);
-
-    if where_clause.predicates.is_empty() {
-        None
-    } else {
-        Some(where_clause)
-    }
+    (!where_clause.predicates.is_empty()).then_some(where_clause)
 }
 
 fn collect_memento_bounds(ir: &EnumIr, env: &CodegenEnv) -> Vec<WherePredicate> {
@@ -74,14 +69,11 @@ fn build_memento_variant(
         .map(|(_, field)| build_memento_field(field, recallable_trait, generic_type_params))
         .peekable();
 
-    if fields.peek().is_none() {
-        return quote! { #name };
-    }
-
     match variant.shape {
+        VariantShape::Unit => quote! { #name },
+        _ if fields.peek().is_none() => quote! { #name },
         VariantShape::Named => quote! { #name { #(#fields),* } },
         VariantShape::Unnamed => quote! { #name(#(#fields),*) },
-        VariantShape::Unit => quote! { #name },
     }
 }
 
