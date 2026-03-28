@@ -353,8 +353,7 @@ pub(crate) fn is_generic_type_param(ty: &Type, generic_type_params: &HashSet<&Id
     match ty {
         Type::Path(tp) if tp.qself.is_none() && tp.path.segments.len() == 1 => {
             let segment = &tp.path.segments[0];
-            matches!(segment.arguments, PathArguments::None)
-                && generic_type_params.contains(&segment.ident)
+            segment.arguments.is_empty() && generic_type_params.contains(&segment.ident)
         }
         _ => false,
     }
@@ -365,8 +364,23 @@ mod tests {
     use quote::{ToTokens, quote};
     use syn::parse_quote;
 
+    use super::{
+        GenericParamLookup, GenericParamPlan, GenericParamRetention,
+        collect_generic_dependencies_in_where_predicate,
+    };
     use crate::context::internal::shared::CodegenItemIr;
     use crate::context::internal::structs::StructIr;
+
+    #[test]
+    fn generic_param_plan_type_arg_emits_lifetime_arguments() {
+        let param = parse_quote!('a);
+        let plan = GenericParamPlan {
+            param: &param,
+            retention: GenericParamRetention::Retained,
+        };
+
+        assert_eq!(plan.type_arg().to_string(), quote!('a).to_string());
+    }
 
     #[test]
     fn memento_generics_preserve_retained_bounds_defaults_and_where_clauses() {
@@ -440,5 +454,46 @@ mod tests {
             ir.memento_type().to_string(),
             quote!(ExampleMemento<T>).to_string()
         );
+    }
+
+    #[test]
+    fn memento_where_clause_ignores_predicates_without_generic_dependencies() {
+        let input = parse_quote! {
+            struct Example<T>
+            where
+                u8: Copy,
+                T: Clone,
+            {
+                value: T,
+            }
+        };
+
+        let ir = StructIr::analyze(&input).unwrap();
+
+        assert_eq!(
+            ir.memento_where_clause()
+                .unwrap()
+                .to_token_stream()
+                .to_string(),
+            quote!(where T: Clone).to_string()
+        );
+    }
+
+    #[test]
+    fn where_predicate_dependency_collection_ignores_non_generic_const_paths() {
+        let generics = parse_quote!(<const N: usize>);
+        let lookup = GenericParamLookup::new(&generics);
+        let predicate = parse_quote!([u8; SOME_CONST]: Copy);
+
+        assert!(collect_generic_dependencies_in_where_predicate(&predicate, &lookup).is_empty());
+    }
+
+    #[test]
+    fn where_predicate_dependency_collection_visits_non_single_segment_expr_paths() {
+        let generics = parse_quote!(<const N: usize>);
+        let lookup = GenericParamLookup::new(&generics);
+        let predicate = parse_quote!([u8; module::SOME_CONST]: Copy);
+
+        assert!(collect_generic_dependencies_in_where_predicate(&predicate, &lookup).is_empty());
     }
 }

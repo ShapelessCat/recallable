@@ -95,6 +95,25 @@ struct DependentBoundOuter<T: From<U>, U> {
     marker: PhantomData<U>,
 }
 
+#[derive(recallable::Recallable, recallable::Recall)]
+struct LifetimeBoundOuter<'a, T>
+where
+    T: Clone + core::fmt::Debug + PartialEq + From<&'a str>,
+{
+    value: T,
+    #[recallable(skip)]
+    marker: PhantomData<&'a str>,
+}
+
+#[derive(recallable::Recallable, recallable::Recall)]
+struct ConcretePredicateOuter<T>
+where
+    T: Clone + core::fmt::Debug + PartialEq,
+    [u8; 16]: Copy,
+{
+    value: T,
+}
+
 #[derive(Clone, Debug, PartialEq, Deserialize, recallable::Recallable, recallable::Recall)]
 struct GenericInner<T> {
     value: T,
@@ -151,6 +170,15 @@ struct GenericPair<T, const N: usize> {
 struct ConstOuter<const N: usize> {
     #[recallable]
     inner: ConstBuffer<N>,
+}
+
+mod fixed_lengths {
+    pub(super) const WIDTH: usize = 8;
+}
+
+#[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
+struct FixedWidthBuffer {
+    bytes: [u8; fixed_lengths::WIDTH],
 }
 
 #[derive(Clone, Debug, PartialEq, recallable::Recallable, recallable::Recall)]
@@ -265,6 +293,25 @@ fn test_bound_dependencies_keep_other_generic_params_retained() {
 }
 
 #[test]
+fn test_bound_dependencies_keep_lifetimes_on_memento_types() {
+    // Regression: the retained where-clause lifetime `'a` must stay on the generated
+    // memento type, or this derive input stops compiling because `T: From<&'a str>`
+    // would mention an undeclared lifetime in the generated bounds.
+    let _: fn(
+        &mut LifetimeBoundOuter<'static, String>,
+        <LifetimeBoundOuter<'static, String> as recallable::Recallable>::Memento,
+    ) = <LifetimeBoundOuter<'static, String> as recallable::Recall>::recall;
+}
+
+#[test]
+fn test_concrete_only_where_predicates_are_accepted() {
+    let _: fn(
+        &mut ConcretePredicateOuter<String>,
+        <ConcretePredicateOuter<String> as recallable::Recallable>::Memento,
+    ) = <ConcretePredicateOuter<String> as recallable::Recall>::recall;
+}
+
+#[test]
 fn test_recallable_field_accepts_generic_path_type() {
     let _: fn(&mut GenericPathOuter, <GenericPathOuter as recallable::Recallable>::Memento) =
         <GenericPathOuter as recallable::Recall>::recall;
@@ -309,6 +356,12 @@ fn test_const_generic_recallable_field_with_mixed_type_and_const_args() {
         &mut MixedConstOuter<u32, 2>,
         <MixedConstOuter<u32, 2> as recallable::Recallable>::Memento,
     ) = <MixedConstOuter<u32, 2> as recallable::Recall>::recall;
+}
+
+#[test]
+fn test_multi_segment_const_paths_are_supported() {
+    let _: fn(&mut FixedWidthBuffer, <FixedWidthBuffer as recallable::Recallable>::Memento) =
+        <FixedWidthBuffer as recallable::Recall>::recall;
 }
 
 #[test]
