@@ -75,11 +75,11 @@ fn gen_enum_restore_helper(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 {
 
 fn build_variant_memento_pattern(variant: &VariantIr<'_>) -> Option<TokenStream2> {
     let mut bindings = variant.kept_bindings().peekable();
+    let non_empty = bindings.peek().is_some();
     match variant.shape {
-        VariantShape::Unit => None,
-        _ if bindings.peek().is_none() => None,
-        VariantShape::Named => Some(quote! { { #(#bindings),* } }),
-        VariantShape::Unnamed => Some(quote! { ( #(#bindings),* ) }),
+        VariantShape::Named if non_empty => Some(quote! { { #(#bindings),* } }),
+        VariantShape::Unnamed if non_empty => Some(quote! { ( #(#bindings),* ) }),
+        _ => None,
     }
 }
 
