@@ -7,15 +7,17 @@
 //! - `#[recallable_model]`: injects `Recallable`/`Recall` derives for structs and
 //!   assignment-only enums; with the `serde` Cargo feature enabled for this macro
 //!   crate it also adds `serde::Serialize` and applies `#[serde(skip)]` to fields
-//!   marked `#[recallable(skip)]`. Complex enums with nested `#[recallable]`
-//!   fields or non-marker skipped fields should derive `Recallable` and
-//!   implement `Recall` or `TryRecall` manually. `PhantomData<_>` fields are
-//!   auto-skipped by the derive, and explicit `#[recallable(skip)]` on them
-//!   remains accepted.
+//!   marked `#[recallable(skip)]`, keeping the source-side serde shape aligned
+//!   with the generated memento in the common path. Complex enums with nested
+//!   `#[recallable]` fields or non-marker skipped fields should derive
+//!   `Recallable` and implement `Recall` or `TryRecall` manually. `PhantomData<_>`
+//!   fields are auto-skipped by the derive, and explicit `#[recallable(skip)]` on
+//!   them remains accepted.
 //!
 //! - `#[derive(Recallable)]`: generates an internal companion memento type, exposes
 //!   it as `<Type as Recallable>::Memento`, and emits the `Recallable` impl; with the
-//!   `impl_from` Cargo feature it also generates `From<Type>` for the memento type.
+//!   `impl_from` Cargo feature it also generates `From<Type>` for the memento type
+//!   for in-memory snapshot workflows.
 //!
 //! - `#[derive(Recall)]`: generates the `Recall` implementation, recursively
 //!   recalls struct fields annotated with `#[recallable]`, and supports enums only
@@ -39,7 +41,7 @@ mod model_macro;
 /// - When the `serde` feature is enabled for the macro crate, it also adds
 ///   `#[derive(serde::Serialize)]`.
 /// - For fields annotated with `#[recallable(skip)]`, it injects `#[serde(skip)]`
-///   to keep serde output aligned with recall behavior.
+///   to keep source-side serde aligned with the generated memento shape.
 /// - This attribute itself takes no arguments.
 /// - Complex enums with nested `#[recallable]` fields or non-marker skipped
 ///   fields are rejected so the caller can keep `Recall` or `TryRecall`
@@ -78,7 +80,7 @@ pub fn recallable_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// semantics; it uses whatever memento shape the field type defines.
 ///
 /// The companion type itself is generated as an internal implementation detail. The supported
-/// way to name it is `<Type as Recallable>::Memento`. It is intended to be produced and consumed
+/// way to name it is `<Type as Recallable>::Memento`. It is intended to be deserialized and applied
 /// alongside the source item, primarily through `Recall::recall`/`TryRecall::try_recall`, not as
 /// a field-inspection surface with widened visibility.
 ///
@@ -95,8 +97,9 @@ pub fn recallable_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// still derived on the memento even with this attribute.
 ///
 /// When the `impl_from` feature is enabled for the macro crate, a
-/// `From<Type>` implementation is also generated for the memento type. For `#[recallable]`
-/// fields, that additionally requires `<FieldType as Recallable>::Memento: From<FieldType>`.
+/// `From<Type>` implementation is also generated for the memento type. This is useful for
+/// in-memory snapshot flows. For `#[recallable]` fields, that additionally requires
+/// `<FieldType as Recallable>::Memento: From<FieldType>`.
 #[proc_macro_derive(Recallable, attributes(recallable))]
 pub fn derive_recallable(input: TokenStream) -> TokenStream {
     let input: DeriveInput = parse_macro_input!(input as DeriveInput);

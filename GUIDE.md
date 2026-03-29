@@ -259,25 +259,46 @@ Enum support is intentionally split:
 
 - assignment-only enums can use `#[recallable_model]` directly
 - enums with `PhantomData<_>` marker fields can also use it directly; those
-  marker fields are auto-skipped, and explicit `#[recallable(skip)]` remains
-  accepted
+  marker fields are the only skipped-field exception the derive handles
+  automatically
 - enums with nested `#[recallable]` or other `#[recallable(skip)]` fields
   should derive `Recallable` and implement `Recall` or `TryRecall` manually
 
-Example:
+Concrete example:
 
 ```rust
-use recallable::recallable_model;
+use recallable::{Recall, Recallable, recallable_model};
 
 #[recallable_model]
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct UserProfile {
-    id: u64,
-    display_name: String,
-    #[recallable(skip)]
-    cache_key: String,
+#[derive(Clone, Debug, PartialEq)]
+enum ConnectionState {
+    Disconnected,
+    Connected { session_id: u64, label: String },
+}
+
+fn main() {
+    let mut state = ConnectionState::Disconnected;
+    let memento: <ConnectionState as Recallable>::Memento =
+        serde_json::from_str(r#"{"Connected":{"session_id":7,"label":"live"}}"#).unwrap();
+
+    state.recall(memento);
+
+    assert_eq!(
+        state,
+        ConnectionState::Connected {
+            session_id: 7,
+            label: "live".into(),
+        }
+    );
 }
 ```
+
+That example is the normal supported enum flow:
+
+- assignment-only variants work directly with `#[recallable_model]`
+- nested `#[recallable]` enum fields still need manual `Recall` or `TryRecall`
+- `PhantomData<_>` markers are the only skipped-field exception handled
+  automatically
 
 ### Attribute ordering requirement
 
@@ -363,18 +384,21 @@ struct SessionState {
 Important distinction:
 
 - `#[recallable_model]` mutates source-side serde behavior for the common case
-- direct `#[derive(Recallable, Recall)]` does not
+- direct `#[derive(Recallable, Recall)]` does not change the source item for
+  you
 
 Direct derives are also the split point for complex enums:
 
 - `#[derive(Recallable)]` supports enum-shaped mementos under the normal field rules
-- `#[derive(Recall)]` works only for assignment-only enums
-- enums with nested `#[recallable]` or skipped variant fields should derive
+- `#[derive(Recall)]` works only for assignment-only enums, plus
+  `PhantomData<_>` marker fields that are auto-skipped
+- enums with nested `#[recallable]` or other skipped variant fields should derive
   `Recallable` and implement `Recall` or `TryRecall` manually
 
 If you use direct derives and want the source struct to serialize in the same
 shape as the generated memento, you must add the serde derives and
-`#[serde(skip)]` attributes yourself.
+`#[serde(skip)]` attributes yourself. Use `#[recallable_model]` when you want
+those shapes to align automatically.
 
 ## Skipped fields and memento visibility
 
@@ -668,7 +692,7 @@ The derive macros support more than just simple named structs.
 - unit structs
 - enums for `Recallable`
 - enums for `Recall` and `recallable_model` only when every variant field is
-  assignment-only
+  assignment-only, plus `PhantomData<_>` markers that the derive auto-skips
 - complex enums should derive `Recallable` only and supply manual `Recall` or
   `TryRecall`
 
@@ -697,21 +721,28 @@ That means:
 ## Serialization guidance
 
 Recallable is codec-agnostic.
-It only cares that your chosen format can:
+For persisted state, the usual flow is:
 
-- serialize the source-side state you emit
-- deserialize into the memento type you apply
+1. serialize the source value with your chosen Serde-compatible format
+2. deserialize into the memento type you apply
+3. apply the memento
+
+This applies to any Serde-compatible format, not just the `serde_json` and
+`postcard` examples in this repository. Compatibility is a property of the
+chosen format and its deserializer behavior, not of Recallable itself.
 
 Practical guidance:
 
-- use `serde_json` for readable examples, tests, and debugging
-- use `postcard` or another binary format when you care about size or `no_std`
+- use a human-readable format when you want easier inspection in docs or tests
+- use a binary format when you care about size or `no_std`, but treat
+  fixed-layout codecs as schema-sensitive unless you version them
 - use `#[recallable_model]` when you want the source struct's serialized shape
   to align automatically with the generated memento
 - use direct derives when you want explicit source-side serde control
 
 Important asymmetry:
 
+- generated mementos are the deserialization targets you apply
 - generated mementos derive `Deserialize`
 - generated mementos do not derive `Serialize`
 
