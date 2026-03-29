@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Enum support: `#[derive(Recallable)]` works on all enums (including variants with
+  `#[recallable]` fields); `#[derive(Recall)]` and `#[recallable_model]` are available for
+  assignment-only enums (no `#[recallable]` fields, no non-`PhantomData` skipped fields)
+
+- `PhantomData` fields in enums are now auto-skipped from the memento (matching struct behavior)
+
+### Fixed
+
+- Const generic markers now emit proper helper types in generated code
+
+- `impl_from` codegen for enums and structs with unit variants
+
 ## [0.2.0] - 2026-03-27
 
 ### Added
@@ -47,5 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `no_std` compatible
 
+[Unreleased]: https://github.com/ShapelessCat/recallable/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/ShapelessCat/recallable/releases/tag/v0.2.0
 [0.1.0]: https://github.com/ShapelessCat/recallable/releases/tag/v0.1.0
