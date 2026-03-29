@@ -100,15 +100,17 @@ For `no_std + serde` deployments, prefer a `no_std`-compatible format such as
 For enums, `#[recallable_model]` is intentionally narrower than `#[derive(Recallable)]`:
 
 - assignment-only enums are supported directly
-- enums with skipped `PhantomData<_>` marker fields are still supported directly
+- enums with `PhantomData<_>` marker fields are still supported directly; those
+  marker fields are auto-skipped, and explicit `#[recallable(skip)]` remains
+  accepted
 - enums with nested `#[recallable]` or other `#[recallable(skip)]` fields should
   derive `Recallable` and implement `Recall` or `TryRecall` manually
 
-Skipped `PhantomData<_>` can also affect generic retention on generated
-mementos. When a skipped marker is the only field mentioning a generic that
-still must remain part of the memento type, the derive keeps that generic alive
-with an internal hidden marker. The user-facing examples for that corner case
-live in the API docs and [GUIDE.md](GUIDE.md).
+Auto-skipped `PhantomData<_>` can also affect generic retention on generated
+mementos. When such a marker is the only field mentioning a generic that still
+must remain part of the memento type, the derive keeps that generic alive with
+an internal hidden marker. The user-facing examples for that corner case live
+in the API docs and [GUIDE.md](GUIDE.md).
 
 ## Features
 
@@ -116,7 +118,7 @@ live in the API docs and [GUIDE.md](GUIDE.md).
   `serde::Deserialize`, and `#[recallable_model]` also adds the source-side serde behavior
   described above. This feature remains compatible with `no_std` as long as your serde stack is
   configured for `no_std`.
-- `impl_from`: generates `From<Struct>` for `<Struct as Recallable>::Memento`
+- `impl_from`: generates `From<Type>` for `<Type as Recallable>::Memento`
 - `full`: convenience feature for `serde` + `impl_from`
 - `default-features = false`: disables recallable's default serde integration. It is useful for
   non-serde setups, but it is not what makes `no_std` possible.
@@ -165,6 +167,9 @@ source struct's serialized shape already matches the generated memento shape.
 
 Enable `impl_from` when you want an owned memento inside the same process for
 checkpoint/rollback, undo stacks, or test fixtures.
+
+With `impl_from`, both struct and enum `Recallable` derives can generate
+`From<Type>` for the companion memento, as long as the generated bounds hold.
 
 ```rust
 use recallable::{Recall, Recallable, recallable_model};
@@ -240,10 +245,13 @@ impl Recall for EngineState {
 - `#[derive(Recallable)]` supports enums under the normal field rules
 - `#[derive(Recall)]` and `#[recallable_model]` support enums only when every
   non-marker variant field is assignment-only
-- Enums with skipped `PhantomData<_>` marker fields are still supported
+- Enums with `PhantomData<_>` marker fields are still supported; those marker
+  fields are auto-skipped, and explicit `#[recallable(skip)]` remains accepted
 - Enums with nested `#[recallable]` or other `#[recallable(skip)]` fields
   should derive `Recallable` and implement `Recall` or `TryRecall` manually
 - Borrowed state fields are rejected unless they are skipped
+- `PhantomData<_>` fields are auto-skipped by the derive, including
+  lifetime-bearing markers such as `PhantomData<&'a T>`
 - `#[recallable]` is path-only: it supports type parameters, path types, and
   associated types, but not tuple/reference/slice/function syntax directly
 - Serde attributes are not forwarded to the generated memento

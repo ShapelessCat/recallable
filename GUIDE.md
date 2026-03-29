@@ -151,7 +151,7 @@ Use this when you want an owned memento value within the same process:
 - test fixtures
 - state handoff between components
 
-Enable the `impl_from` feature to derive `From<Struct>` for the generated
+Enable the `impl_from` feature to derive `From<Type>` for the generated
 memento type.
 
 ## Installation and Features
@@ -171,7 +171,7 @@ Feature flags:
   derive `serde::Deserialize`, and `#[recallable_model]` also injects
   source-side serde behavior. This feature remains compatible with `no_std` as
   long as your serde stack is configured for `no_std`.
-- `impl_from`: generates `From<Struct>` for the generated memento
+- `impl_from`: generates `From<Type>` for the generated memento
 - `full`: convenience feature for `serde` + `impl_from`
 - `default-features = false`: disables recallable's default serde integration.
   It is useful for non-serde setups, but it is not what makes `no_std`
@@ -258,7 +258,9 @@ With the default `serde` feature enabled, it also injects:
 Enum support is intentionally split:
 
 - assignment-only enums can use `#[recallable_model]` directly
-- enums with skipped `PhantomData<_>` marker fields can also use it directly
+- enums with `PhantomData<_>` marker fields can also use it directly; those
+  marker fields are auto-skipped, and explicit `#[recallable(skip)]` remains
+  accepted
 - enums with nested `#[recallable]` or other `#[recallable(skip)]` fields
   should derive `Recallable` and implement `Recall` or `TryRecall` manually
 
@@ -397,8 +399,9 @@ apply it" instead of depending on widened field visibility.
 
 ### Skipped `PhantomData` and retained generics
 
-Most skipped fields simply disappear from the generated memento. The tricky case
-is when a skipped `PhantomData<_>` is the only field mentioning a generic that
+Most skipped fields simply disappear from the generated memento. `PhantomData<_>`
+fields are auto-skipped by the derive, and the tricky case is when such a field
+is the only field mentioning a generic that
 still must remain part of the memento type.
 
 ```rust
@@ -545,7 +548,7 @@ Every `Recall` type automatically implements `TryRecall` with
 
 ## In-memory snapshots with `impl_from`
 
-Enable `impl_from` when you want a derived `From<Struct>` implementation for
+Enable `impl_from` when you want a derived `From<Type>` implementation for
 the generated memento.
 
 ```toml
@@ -602,6 +605,9 @@ For `#[recallable]` fields, this also requires:
 
 That extra export-side bound is why `impl_from` is not enabled implicitly for
 all workflows.
+
+With `impl_from`, both struct and enum `Recallable` derives can generate
+`From<Type>` for the companion memento, as long as the generated bounds hold.
 
 ## Manual trait implementations
 
@@ -684,7 +690,8 @@ owned type.
 That means:
 
 - skipped borrowed fields are allowed
-- lifetime-only markers such as `PhantomData<&'a T>` are allowed
+- `PhantomData<_>` fields are allowed because the derive auto-skips them; this
+  includes lifetime-bearing markers such as `PhantomData<&'a T>`
 - non-skipped borrowed state fields like `&'a str` are rejected
 
 ## Serialization guidance
@@ -734,7 +741,7 @@ Generates:
 
 - the companion memento type
 - the `Recallable` implementation
-- `From<Struct>` for the memento when `impl_from` is enabled
+- `From<Type>` for the memento when `impl_from` is enabled
 - enum-shaped mementos for enums, even when `Recall` must stay manual
 
 ### `#[derive(Recall)]`
@@ -744,8 +751,8 @@ Generates the `Recall` implementation.
 Behavior:
 
 - struct fields are handled as before
-- enum derives are supported only for assignment-only variants, plus skipped
-  `PhantomData<_>` marker fields
+- enum derives are supported only for assignment-only variants, plus
+  `PhantomData<_>` marker fields that are auto-skipped by the derive
 - enums with nested `#[recallable]` or other skipped fields should derive
   `Recallable` and implement `Recall` or `TryRecall` manually
 
