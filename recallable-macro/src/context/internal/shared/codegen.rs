@@ -21,7 +21,7 @@ pub(crate) trait CodegenItemIr<'a> {
     fn all_fields(&self) -> Self::Fields<'_>;
 
     #[must_use]
-    fn memento_decl_generics(&self) -> TokenStream2 {
+    fn memento_decl_generics(&self) -> Option<TokenStream2> {
         let mut params = self
             .generic_params()
             .iter()
@@ -29,11 +29,7 @@ pub(crate) trait CodegenItemIr<'a> {
             .map(GenericParamPlan::decl_param)
             .peekable();
 
-        if params.peek().is_none() {
-            quote! {}
-        } else {
-            quote! { <#(#params),*> }
-        }
+        params.peek().is_some().then_some(quote! { <#(#params),*> })
     }
 
     #[must_use]

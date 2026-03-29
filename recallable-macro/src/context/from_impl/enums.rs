@@ -54,7 +54,7 @@ fn build_enum_from_body(ir: &EnumIr) -> TokenStream2 {
     }
 }
 
-fn build_variant_source_pattern(variant: &VariantIr<'_>) -> TokenStream2 {
+fn build_variant_source_pattern(variant: &VariantIr<'_>) -> Option<TokenStream2> {
     match variant.shape {
         VariantShape::Named => {
             let patterns = variant.indexed_fields().map(|(index, field)| {
@@ -65,15 +65,15 @@ fn build_variant_source_pattern(variant: &VariantIr<'_>) -> TokenStream2 {
                     build_binding_ident(field, index).to_token_stream()
                 }
             });
-            quote! { { #(#patterns),* } }
+            Some(quote! { { #(#patterns),* } })
         }
         VariantShape::Unnamed => {
             let patterns = variant
                 .indexed_fields()
                 .map(|(index, field)| build_binding_pattern(field, index));
-            quote! { ( #(#patterns),* ) }
+            Some(quote! { ( #(#patterns),* ) })
         }
-        VariantShape::Unit => quote! {},
+        VariantShape::Unit => None,
     }
 }
 
