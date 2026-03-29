@@ -35,38 +35,38 @@ CI runs the test matrix on stable and validates the MSRV on Rust 1.88.0. Coverag
 
 ### Macro crate (`recallable-macro/src/`)
 
-- `lib.rs` — three entry points: `#[recallable_model]` attribute macro, `#[derive(Recallable)]`, `#[derive(Recall)]`
+- `lib.rs` — three entry points: `#[recallable_model]`, `#[derive(Recallable)]`, `#[derive(Recall)]`
 - `model_macro.rs` — `#[recallable_model]` expansion: injects derives, detects duplicate `Serialize`, adds `#[serde(skip)]`
-- `context.rs` — codegen facade: re-exports IR types from `internal`, owns feature-flag constants, hosts codegen submodules
-- `context/internal.rs` — re-export hub for the `internal` submodules
-- `context/internal/ir.rs` — `StructIr` (semantic IR, built by `StructIr::analyze()`), `CodegenEnv`, `FieldIr`, `FieldMember`, `FieldStrategy`, `StructShape`
-- `context/internal/bounds.rs` — `MementoTraitSpec`, `collect_recall_like_bounds`, `collect_shared_memento_bounds`
-- `context/internal/generics.rs` — `GenericParamPlan`, `GenericDependencyCollector`, `is_generic_type_param`, generic retention fixed-point loop
-- `context/internal/fields.rs` — field analysis: `has_recallable_skip_attr`, field strategy classification
-- `context/internal/lifetime.rs` — `LifetimeUsageChecker` (`syn::Visit` walker for borrowed-field rejection)
-- `context/internal/util.rs` — `crate_path` helper
-- `context/memento_struct.rs` — generates the companion `{Name}Memento` struct
-- `context/recallable_impl.rs` — generates `Recallable` trait impl
-- `context/recall_impl.rs` — generates `Recall` trait impl
-- `context/from_impl.rs` — generates `From<Struct>` for memento (behind `impl_from` feature)
+- `context.rs` — codegen facade: `analyze_item`/`analyze_recall_input`/`analyze_model_input`, feature-flag constants (`SERDE_ENABLED`, `IMPL_FROM_ENABLED`)
 
-#### IR types (in `context/internal/`)
+#### Semantic analysis (`context/internal/`)
 
-- `StructIr` — the sole IR; built by `StructIr::analyze()` from `DeriveInput`. Holds fields, generics plan, memento name, visibility, shape
-- `CodegenEnv` — resolved once per invocation: crate paths only (`recallable_trait`, `recall_trait`)
-- `MementoTraitSpec` — centralizes memento derive attributes and trait bounds (common traits + optional serde)
-- `FieldIr` — per-field: strategy (`Skip`/`StoreAsSelf`/`StoreAsMemento`), member accessor, memento index
-- `StructShape` — `Named`/`Unnamed`/`Unit`
-- `FieldStrategy` — `Skip`/`StoreAsSelf`/`StoreAsMemento`
-- `GenericParamPlan` — per generic param: `Dropped`/`Retained`/`RetainedAsRecallable`
-- `GenericDependencyCollector` — `syn::Visit` walker that collects which generic params a type/predicate depends on
-- `LifetimeUsageChecker` — `syn::Visit` walker that detects struct lifetime usage in field types
+Split by item kind with shared infrastructure:
 
-Code generation is free functions (`gen_memento_struct`, `gen_recallable_impl`, `gen_recall_impl`, `gen_from_impl`) that take `&StructIr` + `&CodegenEnv`. Feature flags (`SERDE_ENABLED`, `IMPL_FROM_ENABLED`) are module-level constants in `context.rs`, not part of `CodegenEnv`.
+- `shared/` — cross-cutting types and helpers
+  - `item.rs` — `ItemIr` enum (`Struct(StructIr)` | `Enum(EnumIr)`), the top-level IR dispatched by `context.rs`
+  - `env.rs` — `CodegenEnv` (crate paths only)
+  - `fields.rs` — `FieldIr`, `FieldMember`, `FieldStrategy` (`Skip`/`StoreAsSelf`/`StoreAsMemento`), field analysis
+  - `bounds.rs` — `MementoTraitSpec`, shared memento bound collection
+  - `generics.rs` — generic retention fixed-point loop, `GenericDependencyCollector`
+  - `codegen.rs` — `CodegenItemIr`, shared codegen helpers (`build_from_value_expr`, `build_memento_field_tokens`)
+  - `lifetime.rs` — `LifetimeUsageChecker` (borrowed-field rejection)
+  - `util.rs` — `crate_path` helper
+- `structs/` — `StructIr` (+ `StructShape`), struct-specific bounds
+- `enums/` — `EnumIr` (+ `VariantIr`, `VariantShape`), enum-specific bounds, assignment-only validation
+
+#### Code generation (`context/`)
+
+Each codegen module dispatches on `ItemIr` to struct/enum submodules:
+
+- `memento/` (`structs.rs`, `enums.rs`) — companion memento type definition
+- `recallable_impl/` — `Recallable` trait impl
+- `recall_impl/` — `Recall` trait impl
+- `from_impl/` — `From<Item>` for memento (behind `impl_from` feature)
 
 ### Code generation patterns
 
-- All generated code wrapped in `const _: () = { ... }` blocks with `#[automatically_derived]`
+- All generated code uses `#[automatically_derived]` on individual impl/type items
 - Automatic trait bound inference for generic type parameters
 - Dependency-closed generic retention: generics are kept on the memento only if referenced by
   non-skipped fields; where-clause predicates and transitive param dependencies are propagated
@@ -85,7 +85,16 @@ Code generation is free functions (`gen_memento_struct`, `gen_recallable_impl`, 
 - `#[recallable_model]` auto-derives `serde::Serialize` on the struct when the serde feature is
   enabled — adding a manual `#[derive(Serialize)]` is a compile error
 - Generated `recall` and `from` methods are annotated `#[inline]`
-- `PhantomData` fields in structs with lifetimes are auto-skipped from the memento
+- `PhantomData` fields in structs and enums are auto-skipped from the memento
+
+### Enum-specific behavior
+
+- `#[derive(Recallable)]` works on all enums — generates an enum-shaped memento with matching variants
+- `#[derive(Recall)]` and `#[recallable_model]` require "assignment-only" enums: every non-marker
+  variant field must be `StoreAsSelf` (no `#[recallable]` fields, no non-`PhantomData` skipped fields)
+- Complex enums (with `#[recallable]` fields) can derive `Recallable` alone and implement
+  `Recall`/`TryRecall` manually
+- Generated `Recall` for enums does whole-variant assignment (`*self = ...`)
 
 ### Cargo features
 
@@ -95,9 +104,9 @@ Code generation is free functions (`gen_memento_struct`, `gen_recallable_impl`, 
 
 ### Constraints
 
-- Structs only (no enums/unions)
-- Lifetime parameters allowed on the struct, but non-`PhantomData` fields that reference struct
-  lifetimes are rejected at compile time (field-level `validate_no_borrowed_fields`)
+- Structs and enums only (no unions)
+- Lifetime parameters allowed, but non-`PhantomData` fields that reference item
+  lifetimes are rejected at compile time (`validate_no_borrowed_fields`)
 - `#[recallable]` accepts bare type params and arbitrary path types; the macro cannot resolve types,
   so it uses heuristic path matching (e.g. `is_phantom_data` matches any path ending in `PhantomData`)
 - Const generics are supported and tracked through the dependency-closure system
