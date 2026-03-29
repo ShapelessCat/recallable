@@ -10,6 +10,12 @@
 //! turns on macro-generated serde support, and it remains usable in `no_std` environments when
 //! your serde stack is configured without `std`.
 //!
+//! Persisted-state compatibility depends on the chosen codec or format: serialize the source
+//! value, deserialize into the generated memento, then apply it. Generated mementos are
+//! apply-side/deserialization targets, not the default write-side/export format. Any
+//! Serde-compatible format can be used if it can target the generated memento, and fixed-layout
+//! binary codecs should be treated as schema-sensitive unless you version them explicitly.
+//!
 //! ## Motivation
 //!
 //! Many systems receive incremental updates where only a subset of fields change or can be
@@ -30,7 +36,8 @@ extern crate self as recallable;
 ///
 /// Adds `#[derive(Recallable, Recall)]` automatically. When the `serde` feature is enabled,
 /// also derives `serde::Serialize` on the source item and injects `#[serde(skip)]` on fields
-/// marked with `#[recallable(skip)]`.
+/// marked with `#[recallable(skip)]`, so the source-side serde shape stays aligned with the
+/// generated memento in the common path.
 /// Complex enums with nested `#[recallable]` fields or non-marker
 /// `#[recallable(skip)]` fields should derive [`Recallable`] and implement
 /// [`Recall`] or [`TryRecall`] manually. Skipped `PhantomData<_>` marker fields
@@ -69,6 +76,28 @@ extern crate self as recallable;
 /// // on_change is skipped — unchanged by recall
 /// # }
 /// ```
+///
+/// Enum example:
+///
+/// ```rust
+/// # #[cfg(feature = "serde")]
+/// # {
+/// use recallable::{Recall, Recallable, recallable_model};
+///
+/// #[recallable_model]
+/// #[derive(Clone, Debug, PartialEq)]
+/// enum Mode {
+///     Off,
+///     On { level: u8 },
+/// }
+///
+/// let mut mode = Mode::Off;
+/// let memento: <Mode as Recallable>::Memento =
+///     serde_json::from_str(r#"{"On":{"level":3}}"#).unwrap();
+/// mode.recall(memento);
+/// assert_eq!(mode, Mode::On { level: 3 });
+/// # }
+/// ```
 pub use recallable_macro::recallable_model;
 
 /// Derive macro that generates a companion memento type and the [`Recallable`] trait impl.
@@ -81,17 +110,18 @@ pub use recallable_macro::recallable_model;
 /// fields can still derive [`Recallable`] and provide manual [`Recall`] or
 /// [`TryRecall`] behavior.
 ///
-/// The generated memento type mirrors the original item but replaces `#[recallable]`-annotated fields
-/// with their `<FieldType as Recallable>::Memento` type and omits `#[recallable(skip)]` fields.
+/// The generated memento type mirrors the original item but replaces `#[recallable]`-annotated
+/// fields with their `<FieldType as Recallable>::Memento` type and omits
+/// `#[recallable(skip)]` fields.
 /// The generated companion type has the same visibility as the input item.
 /// Its fields are always emitted without visibility modifiers, so they remain private to the
-/// containing module. This is intentional: mementos are meant to be created and consumed alongside
-/// the companion item, primarily via [`Recall::recall`] and [`TryRecall::try_recall`], with only
-/// occasional same-file testing or debugging use.
+/// containing module. This is intentional: mementos are meant to be deserialized and applied
+/// alongside the source item, primarily via [`Recall::recall`] and [`TryRecall::try_recall`], with
+/// only occasional same-file testing or debugging use.
 /// For container-like field types, this is whatever memento shape that field type chose; the macro
 /// does not special-case merge semantics.
 /// When the `impl_from` feature is enabled, `#[derive(Recallable)]` also generates
-/// `From<Type>` for the memento type, which requires
+/// `From<Type>` for the memento type, which is useful for in-memory snapshot flows and requires
 /// `<FieldType as Recallable>::Memento: From<FieldType>` for each `#[recallable]` field.
 ///
 /// When a skipped field would otherwise remove the last field-level mention of a

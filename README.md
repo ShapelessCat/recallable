@@ -152,16 +152,23 @@ recallable = { version = "0.2", features = ["impl_from"] }
 
 ### Persistence and restore
 
-This is the default path when state crosses process boundaries or is written to
-disk. It works in both `std` and `no_std` environments; only the serialization
-format and serde configuration differ.
+This is the normal persistence path when state crosses process boundaries or
+is written to disk. It works in both `std` and `no_std` environments; only the
+serialization format and serde configuration differ.
 
-1. Serialize the source struct.
+1. Serialize the source value with your chosen Serde-compatible format.
 2. Deserialize into `<Type as Recallable>::Memento`.
 3. Apply the memento with `recall` or `try_recall`.
 
+Generated mementos are deserialization targets, not the default write-side
+export format. If you want a stable custom wire format or different
+source-side serde behavior, define the memento manually.
+
 This flow is especially convenient with `#[recallable_model]`, because the
-source struct's serialized shape already matches the generated memento shape.
+source struct's serialized shape already matches the generated memento shape
+automatically. Any Serde-compatible format can be used here; `serde_json` and
+`postcard` show up in this repository's tests and examples only as concrete
+reference points.
 
 ### In-memory snapshots
 
