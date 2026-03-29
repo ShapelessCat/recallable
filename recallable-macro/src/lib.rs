@@ -9,7 +9,9 @@
 //!   crate it also adds `serde::Serialize` and applies `#[serde(skip)]` to fields
 //!   marked `#[recallable(skip)]`. Complex enums with nested `#[recallable]`
 //!   fields or non-marker skipped fields should derive `Recallable` and
-//!   implement `Recall` or `TryRecall` manually.
+//!   implement `Recall` or `TryRecall` manually. `PhantomData<_>` fields are
+//!   auto-skipped by the derive, and explicit `#[recallable(skip)]` on them
+//!   remains accepted.
 //!
 //! - `#[derive(Recallable)]`: generates an internal companion memento type, exposes
 //!   it as `<Type as Recallable>::Memento`, and emits the `Recallable` impl; with the
@@ -20,7 +22,7 @@
 //!   when every non-marker variant field is assignment-only.
 //!
 //! Feature flags are evaluated in the `recallable-macro` crate itself. See `context`
-//! for details about the generated memento struct and trait implementations.
+//! for details about the generated memento type and trait implementations.
 
 use proc_macro::TokenStream;
 
@@ -43,7 +45,7 @@ mod model_macro;
 ///   fields are rejected so the caller can keep `Recall` or `TryRecall`
 ///   explicit.
 ///
-/// This macro preserves the original struct shape and only mutates attributes.
+/// This macro preserves the original item shape and only mutates attributes.
 ///
 /// **Attribute ordering:** This macro must appear *before* any attributes it needs
 /// to inspect. An attribute macro only receives attributes that follow it in source
@@ -83,7 +85,7 @@ pub fn recallable_model(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// The `Recallable` impl sets `type Memento` to that generated type and adds any required generic
 /// bounds.
 ///
-/// The generated memento struct always derives `Clone`, `Debug`, and `PartialEq`.
+/// The generated memento type always derives `Clone`, `Debug`, and `PartialEq`.
 /// When the `serde` feature is enabled, it also derives `serde::Deserialize`.
 /// All non-skipped field types must implement these derived traits.
 ///
@@ -131,7 +133,8 @@ pub fn derive_recallable(input: TokenStream) -> TokenStream {
 /// For `#[recallable]` fields, replace/merge behavior comes from the field type's own
 /// `Recall` implementation.
 /// Enums are supported only when every non-marker variant field is
-/// assignment-only.
+/// assignment-only. `PhantomData<_>` marker fields are auto-skipped by the
+/// derive, and explicit `#[recallable(skip)]` on them remains accepted.
 /// For supported enums, the generated implementation restores the target variant
 /// from the memento directly.
 pub fn derive_recall(input: TokenStream) -> TokenStream {

@@ -29,16 +29,18 @@ extern crate self as recallable;
 /// Attribute macro that prepares a struct or assignment-only enum for the Memento pattern.
 ///
 /// Adds `#[derive(Recallable, Recall)]` automatically. When the `serde` feature is enabled,
-/// also derives `serde::Serialize` on the struct and injects `#[serde(skip)]` on fields
+/// also derives `serde::Serialize` on the source item and injects `#[serde(skip)]` on fields
 /// marked with `#[recallable(skip)]`.
 /// Complex enums with nested `#[recallable]` fields or non-marker
 /// `#[recallable(skip)]` fields should derive [`Recallable`] and implement
 /// [`Recall`] or [`TryRecall`] manually. Skipped `PhantomData<_>` marker fields
-/// remain supported on assignment-only enums.
+/// remain supported on assignment-only enums, and `PhantomData<_>` fields are
+/// auto-skipped by the derive even without an explicit `#[recallable(skip)]`.
 ///
 /// Lifetime parameters are supported only when the generated memento can stay owned:
-/// non-skipped fields may not borrow one of the struct's lifetimes. Skipped borrowed
-/// fields and lifetime-only markers such as `PhantomData<&'a T>` are allowed.
+/// non-skipped fields may not borrow one of the item's lifetimes. Skipped borrowed
+/// fields are allowed, and `PhantomData<_>` fields are allowed because the derive
+/// auto-skips them, including lifetime-bearing markers such as `PhantomData<&'a T>`.
 ///
 /// This example requires the `serde` feature.
 ///
@@ -79,17 +81,17 @@ pub use recallable_macro::recallable_model;
 /// fields can still derive [`Recallable`] and provide manual [`Recall`] or
 /// [`TryRecall`] behavior.
 ///
-/// The memento struct mirrors the original but replaces `#[recallable]`-annotated fields
+/// The generated memento type mirrors the original item but replaces `#[recallable]`-annotated fields
 /// with their `<FieldType as Recallable>::Memento` type and omits `#[recallable(skip)]` fields.
-/// The generated companion type has the same visibility as the input struct.
+/// The generated companion type has the same visibility as the input item.
 /// Its fields are always emitted without visibility modifiers, so they remain private to the
 /// containing module. This is intentional: mementos are meant to be created and consumed alongside
-/// the companion struct, primarily via [`Recall::recall`] and [`TryRecall::try_recall`], with only
+/// the companion item, primarily via [`Recall::recall`] and [`TryRecall::try_recall`], with only
 /// occasional same-file testing or debugging use.
 /// For container-like field types, this is whatever memento shape that field type chose; the macro
 /// does not special-case merge semantics.
 /// When the `impl_from` feature is enabled, `#[derive(Recallable)]` also generates
-/// `From<Struct>` for the memento type, which requires
+/// `From<Type>` for the memento type, which requires
 /// `<FieldType as Recallable>::Memento: From<FieldType>` for each `#[recallable]` field.
 ///
 /// When a skipped field would otherwise remove the last field-level mention of a
@@ -120,8 +122,9 @@ pub use recallable_macro::recallable_model;
 /// retained generic `T` depends on it through `T: From<U>`.
 ///
 /// Lifetime parameters are supported only when the generated memento can stay owned:
-/// non-skipped fields may not borrow one of the struct's lifetimes. Skipped borrowed
-/// fields and lifetime-only markers such as `PhantomData<&'a T>` are allowed.
+/// non-skipped fields may not borrow one of the item's lifetimes. Skipped borrowed
+/// fields are allowed, and `PhantomData<_>` fields are allowed because the derive
+/// auto-skips them, including lifetime-bearing markers such as `PhantomData<&'a T>`.
 ///
 /// This example requires the `serde` feature.
 ///
@@ -162,15 +165,17 @@ pub use recallable_macro::Recallable;
 /// For `#[recallable]` fields, replace/merge behavior comes from the field type's own
 /// [`Recall`] implementation.
 /// Enums are supported only when every non-marker variant field is
-/// assignment-only. Skipped `PhantomData<_>` marker fields are allowed.
+/// assignment-only. `PhantomData<_>` marker fields are allowed because the derive
+/// auto-skips them, and explicit `#[recallable(skip)]` on such fields remains accepted.
 /// Enums with nested `#[recallable]` fields or other skipped fields should
 /// derive [`Recallable`] and implement [`Recall`] or [`TryRecall`] manually.
 /// For supported enums, the derived implementation restores the target variant
 /// from the memento directly.
 ///
 /// Lifetime parameters are supported only when the generated memento can stay owned:
-/// non-skipped fields may not borrow one of the struct's lifetimes. Skipped borrowed
-/// fields and lifetime-only markers such as `PhantomData<&'a T>` are allowed.
+/// non-skipped fields may not borrow one of the item's lifetimes. Skipped borrowed
+/// fields are allowed, and `PhantomData<_>` fields are allowed because the derive
+/// auto-skips them, including lifetime-bearing markers such as `PhantomData<&'a T>`.
 ///
 /// This example requires the `serde` feature.
 ///
