@@ -71,12 +71,11 @@ fn build_memento_variant(
         .kept_fields()
         .map(|(_, field)| build_memento_field(field, recallable_trait, generic_type_params))
         .peekable();
-
+    let non_empty = fields.peek().is_some();
     match variant.shape {
-        VariantShape::Unit => quote! { #name },
-        _ if fields.peek().is_none() => quote! { #name },
-        VariantShape::Named => quote! { #name { #(#fields),* } },
-        VariantShape::Unnamed => quote! { #name(#(#fields),*) },
+        VariantShape::Named if non_empty => quote! { #name { #(#fields),* } },
+        VariantShape::Unnamed if non_empty => quote! { #name(#(#fields),*) },
+        _ => quote! { #name },
     }
 }
 
