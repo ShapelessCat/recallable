@@ -402,7 +402,7 @@ mod tests {
         let ir = StructIr::analyze(&input).unwrap();
 
         assert_eq!(
-            ir.memento_decl_generics().to_string(),
+            ir.memento_decl_generics().unwrap().to_string(),
             quote!(<T: Clone = i32, U, const N: usize = 4>).to_string()
         );
         assert_eq!(
@@ -441,7 +441,7 @@ mod tests {
         let ir = StructIr::analyze(&input).unwrap();
 
         assert_eq!(
-            ir.memento_decl_generics().to_string(),
+            ir.memento_decl_generics().unwrap().to_string(),
             quote!(<T>).to_string()
         );
         assert_eq!(
