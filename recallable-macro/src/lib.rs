@@ -11,8 +11,7 @@
 //!   with the generated memento in the common path. Complex enums with nested
 //!   `#[recallable]` fields or non-marker skipped fields should derive
 //!   `Recallable` and implement `Recall` or `TryRecall` manually. `PhantomData<_>`
-//!   fields are auto-skipped by the derive, and explicit `#[recallable(skip)]` on
-//!   them remains accepted.
+//!   marker fields remain supported when explicitly marked `#[recallable(skip)]`.
 //!
 //! - `#[derive(Recallable)]`: generates an internal companion memento type, exposes
 //!   it as `<Type as Recallable>::Memento`, and emits the `Recallable` impl; with the
@@ -136,8 +135,8 @@ pub fn derive_recallable(input: TokenStream) -> TokenStream {
 /// For `#[recallable]` fields, replace/merge behavior comes from the field type's own
 /// `Recall` implementation.
 /// Enums are supported only when every non-marker variant field is
-/// assignment-only. `PhantomData<_>` marker fields are auto-skipped by the
-/// derive, and explicit `#[recallable(skip)]` on them remains accepted.
+/// assignment-only. `PhantomData<_>` marker fields remain supported when
+/// explicitly marked `#[recallable(skip)]`.
 /// For supported enums, the generated implementation restores the target variant
 /// from the memento directly.
 pub fn derive_recall(input: TokenStream) -> TokenStream {

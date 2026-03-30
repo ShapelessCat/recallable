@@ -5,7 +5,6 @@ use syn::{Field, Ident, Index, Meta, PathArguments, Type};
 use super::generics::{
     BareTypeParam, GenericParamLookup, GenericUsage, collect_generic_dependencies_in_type,
 };
-use super::lifetime::is_phantom_data;
 use super::util::is_recallable_attr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -133,17 +132,6 @@ pub(crate) fn collect_field_irs<'a>(
         let member = field_member(field, index);
         let ty = &field.ty;
 
-        if is_phantom_data(ty) {
-            field_irs.push(FieldIr {
-                source: field,
-                memento_index: None,
-                member,
-                ty,
-                strategy: FieldStrategy::Skip,
-            });
-            continue;
-        }
-
         let strategy = match determine_field_behavior(field)? {
             None => FieldStrategy::Skip,
             Some(FieldBehavior::Keep) => {
@@ -216,10 +204,12 @@ mod tests {
     }
 
     #[test]
-    fn phantom_data_fields_are_always_skipped() {
+    fn phantom_data_fields_follow_explicit_skip_only() {
         let input: syn::DeriveInput = parse_quote! {
             struct Example<T> {
                 marker: ::core::marker::PhantomData<T>,
+                #[recallable(skip)]
+                skipped: ::core::marker::PhantomData<T>,
                 value: u8,
             }
         };
@@ -231,7 +221,8 @@ mod tests {
 
         let (_, field_irs) = collect_field_irs(fields, &lookup).unwrap();
 
-        assert_eq!(field_irs[0].strategy, FieldStrategy::Skip);
-        assert_eq!(field_irs[1].strategy, FieldStrategy::StoreAsSelf);
+        assert_eq!(field_irs[0].strategy, FieldStrategy::StoreAsSelf);
+        assert_eq!(field_irs[1].strategy, FieldStrategy::Skip);
+        assert_eq!(field_irs[2].strategy, FieldStrategy::StoreAsSelf);
     }
 }

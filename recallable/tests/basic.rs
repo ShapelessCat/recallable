@@ -71,6 +71,7 @@ mod phantom_lifetime {
 
     #[derive(Recallable, Recall)]
     struct PhantomLifetime<'a> {
+        #[recallable(skip)]
         marker: PhantomData<&'a ()>,
         value: u8,
     }
@@ -99,17 +100,20 @@ mod phantom_lifetime {
     type PhantomTypeRight = <PhantomType<u16> as Recallable>::Memento;
 
     #[test]
-    fn test_phantom_type_is_auto_skipped_from_memento() {
+    fn test_unskipped_phantom_type_is_retained_in_memento() {
         let mut s = PhantomType::<u8> {
             marker: PhantomData,
             value: 10,
         };
-        let memento = PhantomTypeLeft { value: 42 };
+        let memento = PhantomTypeLeft {
+            marker: PhantomData,
+            value: 42,
+        };
 
         s.recall(memento);
 
         assert_eq!(s.value, 42);
-        assert_eq!(
+        assert_ne!(
             TypeId::of::<PhantomTypeLeft>(),
             TypeId::of::<PhantomTypeRight>()
         );

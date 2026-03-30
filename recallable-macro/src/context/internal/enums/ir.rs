@@ -8,7 +8,9 @@ use crate::context::SERDE_ENABLED;
 use crate::context::internal::shared::FieldMember;
 use crate::context::internal::shared::bounds::MementoTraitSpec;
 use crate::context::internal::shared::codegen::CodegenItemIr;
-use crate::context::internal::shared::fields::{FieldIr, FieldStrategy, collect_field_irs};
+use crate::context::internal::shared::fields::{
+    FieldIr, FieldStrategy, collect_field_irs, has_recallable_skip_attr,
+};
 use crate::context::internal::shared::generics::{
     GenericParamLookup, GenericParamPlan, collect_marker_param_indices, plan_memento_generics,
 };
@@ -191,7 +193,9 @@ impl<'a> EnumIr<'a> {
             .flat_map(|variant| variant.fields.iter())
             .find(|field| {
                 !(matches!(field.strategy, FieldStrategy::StoreAsSelf)
-                    || (field.strategy.is_skip() && is_phantom_data(field.ty)))
+                    || (field.strategy.is_skip()
+                        && has_recallable_skip_attr(field.source)
+                        && is_phantom_data(field.ty)))
             })
     }
 

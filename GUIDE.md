@@ -258,9 +258,8 @@ With the default `serde` feature enabled, it also injects:
 Enum support is intentionally split:
 
 - assignment-only enums can use `#[recallable_model]` directly
-- enums with `PhantomData<_>` marker fields can also use it directly; those
-  marker fields are the only skipped-field exception the derive handles
-  automatically
+- enums with `#[recallable(skip)] PhantomData<_>` marker fields can also use it
+  directly
 - enums with nested `#[recallable]` or other `#[recallable(skip)]` fields
   should derive `Recallable` and implement `Recall` or `TryRecall` manually
 
@@ -297,8 +296,8 @@ That example is the normal supported enum flow:
 
 - assignment-only variants work directly with `#[recallable_model]`
 - nested `#[recallable]` enum fields still need manual `Recall` or `TryRecall`
-- `PhantomData<_>` markers are the only skipped-field exception handled
-  automatically
+- `PhantomData<_>` markers must be written as `#[recallable(skip)]` when they
+  should be omitted from the memento
 
 ### Attribute ordering requirement
 
@@ -391,7 +390,7 @@ Direct derives are also the split point for complex enums:
 
 - `#[derive(Recallable)]` supports enum-shaped mementos under the normal field rules
 - `#[derive(Recall)]` works only for assignment-only enums, plus
-  `PhantomData<_>` marker fields that are auto-skipped
+  explicitly skipped `PhantomData<_>` marker fields
 - enums with nested `#[recallable]` or other skipped variant fields should derive
   `Recallable` and implement `Recall` or `TryRecall` manually
 
@@ -423,9 +422,9 @@ apply it" instead of depending on widened field visibility.
 
 ### Skipped `PhantomData` and retained generics
 
-Most skipped fields simply disappear from the generated memento. `PhantomData<_>`
-fields are auto-skipped by the derive, and the tricky case is when such a field
-is the only field mentioning a generic that
+Most skipped fields simply disappear from the generated memento. Explicitly
+skipped `PhantomData<_>` fields behave the same way, and the tricky case is when
+such a field is the only field mentioning a generic that
 still must remain part of the memento type.
 
 ```rust
@@ -692,7 +691,7 @@ The derive macros support more than just simple named structs.
 - unit structs
 - enums for `Recallable`
 - enums for `Recall` and `recallable_model` only when every variant field is
-  assignment-only, plus `PhantomData<_>` markers that the derive auto-skips
+  assignment-only, plus explicitly skipped `PhantomData<_>` markers
 - complex enums should derive `Recallable` only and supply manual `Recall` or
   `TryRecall`
 
@@ -714,8 +713,9 @@ owned type.
 That means:
 
 - skipped borrowed fields are allowed
-- `PhantomData<_>` fields are allowed because the derive auto-skips them; this
-  includes lifetime-bearing markers such as `PhantomData<&'a T>`
+- `PhantomData<_>` fields are allowed as borrowed markers only when explicitly
+  marked `#[recallable(skip)]`; this includes lifetime-bearing markers such as
+  `PhantomData<&'a T>`
 - non-skipped borrowed state fields like `&'a str` are rejected
 
 ## Serialization guidance
@@ -783,7 +783,7 @@ Behavior:
 
 - struct fields are handled as before
 - enum derives are supported only for assignment-only variants, plus
-  `PhantomData<_>` marker fields that are auto-skipped by the derive
+  explicitly skipped `PhantomData<_>` marker fields
 - enums with nested `#[recallable]` or other skipped fields should derive
   `Recallable` and implement `Recall` or `TryRecall` manually
 

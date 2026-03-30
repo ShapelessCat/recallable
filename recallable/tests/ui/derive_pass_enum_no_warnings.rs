@@ -10,6 +10,7 @@ enum Example<T, const N: usize> {
     Loading(T),
     Ready {
         value: T,
+        #[recallable(skip)]
         marker: PhantomData<[(); N]>,
     },
 }

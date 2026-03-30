@@ -41,13 +41,14 @@ extern crate self as recallable;
 /// Complex enums with nested `#[recallable]` fields or non-marker
 /// `#[recallable(skip)]` fields should derive [`Recallable`] and implement
 /// [`Recall`] or [`TryRecall`] manually. Skipped `PhantomData<_>` marker fields
-/// remain supported on assignment-only enums, and `PhantomData<_>` fields are
-/// auto-skipped by the derive even without an explicit `#[recallable(skip)]`.
+/// remain supported on assignment-only enums when they are explicitly marked
+/// `#[recallable(skip)]`.
 ///
 /// Lifetime parameters are supported only when the generated memento can stay owned:
 /// non-skipped fields may not borrow one of the item's lifetimes. Skipped borrowed
-/// fields are allowed, and `PhantomData<_>` fields are allowed because the derive
-/// auto-skips them, including lifetime-bearing markers such as `PhantomData<&'a T>`.
+/// fields are allowed, and lifetime-bearing `PhantomData<_>` fields are allowed
+/// only when explicitly marked `#[recallable(skip)]`, including markers such as
+/// `PhantomData<&'a T>`.
 ///
 /// This example requires the `serde` feature.
 ///
@@ -153,8 +154,9 @@ pub use recallable_macro::recallable_model;
 ///
 /// Lifetime parameters are supported only when the generated memento can stay owned:
 /// non-skipped fields may not borrow one of the item's lifetimes. Skipped borrowed
-/// fields are allowed, and `PhantomData<_>` fields are allowed because the derive
-/// auto-skips them, including lifetime-bearing markers such as `PhantomData<&'a T>`.
+/// fields are allowed, and lifetime-bearing `PhantomData<_>` fields are allowed
+/// only when explicitly marked `#[recallable(skip)]`, including markers such as
+/// `PhantomData<&'a T>`.
 ///
 /// This example requires the `serde` feature.
 ///
@@ -195,8 +197,8 @@ pub use recallable_macro::Recallable;
 /// For `#[recallable]` fields, replace/merge behavior comes from the field type's own
 /// [`Recall`] implementation.
 /// Enums are supported only when every non-marker variant field is
-/// assignment-only. `PhantomData<_>` marker fields are allowed because the derive
-/// auto-skips them, and explicit `#[recallable(skip)]` on such fields remains accepted.
+/// assignment-only. `PhantomData<_>` marker fields are allowed when explicitly
+/// marked `#[recallable(skip)]`.
 /// Enums with nested `#[recallable]` fields or other skipped fields should
 /// derive [`Recallable`] and implement [`Recall`] or [`TryRecall`] manually.
 /// For supported enums, the derived implementation restores the target variant
@@ -204,8 +206,9 @@ pub use recallable_macro::Recallable;
 ///
 /// Lifetime parameters are supported only when the generated memento can stay owned:
 /// non-skipped fields may not borrow one of the item's lifetimes. Skipped borrowed
-/// fields are allowed, and `PhantomData<_>` fields are allowed because the derive
-/// auto-skips them, including lifetime-bearing markers such as `PhantomData<&'a T>`.
+/// fields are allowed, and lifetime-bearing `PhantomData<_>` fields are allowed
+/// only when explicitly marked `#[recallable(skip)]`, including markers such as
+/// `PhantomData<&'a T>`.
 ///
 /// This example requires the `serde` feature.
 ///
