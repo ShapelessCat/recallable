@@ -22,10 +22,6 @@ pub(crate) struct SerdeEnumAttrs {
 }
 
 impl SerdeFieldAttrs {
-    pub(crate) fn is_empty(&self) -> bool {
-        self.rename.is_none() && self.aliases.is_empty()
-    }
-
     #[must_use]
     pub(crate) fn to_memento_tokens(&self) -> TokenStream2 {
         let rename = self.rename.as_ref().map(|lit| {

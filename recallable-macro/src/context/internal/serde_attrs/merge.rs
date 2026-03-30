@@ -88,7 +88,7 @@ mod tests {
             Span::call_site(),
         )
         .unwrap();
-        assert!(result.is_empty());
+        assert!(result.rename.is_none() && result.aliases.is_empty());
     }
 
     #[test]

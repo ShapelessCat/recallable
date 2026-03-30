@@ -24,13 +24,13 @@ pub(crate) fn analyze_struct_serde_attrs(
         let serde = parse_serde_attrs(field)?;
 
         // Reject rename/alias on skipped fields
-        if has_recallable_skip_attr(field) {
-            if recallable.rename.is_some() || !recallable.aliases.is_empty() {
-                return Err(syn::Error::new_spanned(
-                    field,
-                    "`rename` and `alias` cannot be used on a `#[recallable(skip)]` field",
-                ));
-            }
+        if has_recallable_skip_attr(field)
+            && (recallable.rename.is_some() || !recallable.aliases.is_empty())
+        {
+            return Err(syn::Error::new_spanned(
+                field,
+                "`rename` and `alias` cannot be used on a `#[recallable(skip)]` field",
+            ));
         }
 
         let merged = merge_field_attrs(
@@ -58,13 +58,13 @@ pub(crate) fn analyze_enum_serde_attrs(
             let recallable = parse_recallable_serde_attrs(field)?;
             let serde = parse_serde_attrs(field)?;
 
-            if has_recallable_skip_attr(field) {
-                if recallable.rename.is_some() || !recallable.aliases.is_empty() {
-                    return Err(syn::Error::new_spanned(
-                        field,
-                        "`rename` and `alias` cannot be used on a `#[recallable(skip)]` field",
-                    ));
-                }
+            if has_recallable_skip_attr(field)
+                && (recallable.rename.is_some() || !recallable.aliases.is_empty())
+            {
+                return Err(syn::Error::new_spanned(
+                    field,
+                    "`rename` and `alias` cannot be used on a `#[recallable(skip)]` field",
+                ));
             }
 
             let merged = merge_field_attrs(
