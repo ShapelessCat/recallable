@@ -9,3 +9,9 @@ error: Recall derives do not support borrowed fields
   |
 7 |     b: Vec<&'a u8>,
   |        ^^^^^^^^^^^
+
+error: Recall derives do not support borrowed fields
+ --> tests/ui/derive_fail_multiple_borrowed_fields.rs:8:13
+  |
+8 |     marker: PhantomData<&'a ()>,
+  |             ^^^^^^^^^^^^^^^^^^^

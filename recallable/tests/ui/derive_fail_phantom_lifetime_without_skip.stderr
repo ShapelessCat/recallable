@@ -1,0 +1,5 @@
+error: Recall derives do not support borrowed fields
+ --> tests/ui/derive_fail_phantom_lifetime_without_skip.rs:7:13
+  |
+7 |     marker: PhantomData<&'a ()>,
+  |             ^^^^^^^^^^^^^^^^^^^

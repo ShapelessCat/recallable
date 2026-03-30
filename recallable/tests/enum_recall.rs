@@ -12,6 +12,7 @@ enum AssignmentOnlyEnum<T, const N: usize> {
     Ready {
         bytes: [u8; 2],
         version: u8,
+        #[recallable(skip)]
         marker: PhantomData<[(); N]>,
     },
 }

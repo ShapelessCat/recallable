@@ -5,6 +5,7 @@ use syn::WherePredicate;
 use crate::context::internal::enums::{
     EnumIr, VariantIr, VariantShape, build_binding_ident, collect_recall_like_bounds_for_enum,
 };
+use crate::context::internal::shared::has_recallable_skip_attr;
 use crate::context::internal::shared::lifetime::is_phantom_data;
 use crate::context::internal::shared::{CodegenEnv, CodegenItemIr, FieldIr, FieldStrategy};
 
@@ -111,7 +112,11 @@ fn build_variant_restore_value(field: &FieldIr<'_>, index: usize) -> TokenStream
             let binding = build_binding_ident(field, index);
             quote! { #binding }
         }
-        FieldStrategy::Skip if is_phantom_data(field.ty) => quote! { ::core::marker::PhantomData },
+        FieldStrategy::Skip
+            if has_recallable_skip_attr(field.source) && is_phantom_data(field.ty) =>
+        {
+            quote! { ::core::marker::PhantomData }
+        }
         FieldStrategy::StoreAsMemento | FieldStrategy::Skip => {
             unreachable!("manual-only gating rejects non-phantom skipped and recallable fields")
         }

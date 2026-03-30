@@ -19,9 +19,6 @@ pub(crate) fn validate_no_borrowed_fields(
         if has_recallable_skip_attr(field) {
             continue;
         }
-        if is_phantom_data(&field.ty) {
-            continue;
-        }
         if field_uses_item_lifetime(&field.ty, item_lifetimes) {
             let err =
                 syn::Error::new_spanned(&field.ty, "Recall derives do not support borrowed fields");
@@ -111,6 +108,28 @@ mod tests {
                 value: &'a str,
                 #[recallable(skip)]
                 skipped: &'a str,
+                #[recallable(skip)]
+                marker: ::core::marker::PhantomData<&'a ()>,
+            }
+        };
+        let fields = match &input.data {
+            syn::Data::Struct(data) => &data.fields,
+            _ => unreachable!(),
+        };
+        let item_lifetimes = collect_item_lifetimes(&input.generics);
+        let error = validate_no_borrowed_fields(fields, &item_lifetimes).unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("Recall derives do not support borrowed fields")
+        );
+    }
+
+    #[test]
+    fn borrowed_field_validation_rejects_unskipped_phantom_lifetime_fields() {
+        let input: syn::DeriveInput = parse_quote! {
+            struct Example<'a> {
                 marker: ::core::marker::PhantomData<&'a ()>,
             }
         };

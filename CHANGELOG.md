@@ -13,7 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `#[recallable]` fields); `#[derive(Recall)]` and `#[recallable_model]` are available for
   assignment-only enums (no `#[recallable]` fields, no non-`PhantomData` skipped fields)
 
-- `PhantomData` fields in enums are now auto-skipped from the memento (matching struct behavior)
+### Changed
+
+- Only fields of `PhantomData` types that are decorated with `#[recallable(skip)]` can include
+  generic type parameters for lifetimes.
 
 ### Fixed
 

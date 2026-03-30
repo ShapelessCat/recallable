@@ -85,13 +85,15 @@ Each codegen module dispatches on `ItemIr` to struct/enum submodules:
 - `#[recallable_model]` auto-derives `serde::Serialize` on the struct when the serde feature is
   enabled — adding a manual `#[derive(Serialize)]` is a compile error
 - Generated `recall` and `from` methods are annotated `#[inline]`
-- `PhantomData` fields in structs and enums are auto-skipped from the memento
+- `PhantomData` fields are omitted from the memento only when explicitly marked
+  `#[recallable(skip)]`
 
 ### Enum-specific behavior
 
 - `#[derive(Recallable)]` works on all enums — generates an enum-shaped memento with matching variants
 - `#[derive(Recall)]` and `#[recallable_model]` require "assignment-only" enums: every non-marker
-  variant field must be `StoreAsSelf` (no `#[recallable]` fields, no non-`PhantomData` skipped fields)
+  variant field must be `StoreAsSelf` (no `#[recallable]` fields, no skipped fields other than
+  explicitly skipped `PhantomData`)
 - Complex enums (with `#[recallable]` fields) can derive `Recallable` alone and implement
   `Recall`/`TryRecall` manually
 - Generated `Recall` for enums does whole-variant assignment (`*self = ...`)
@@ -105,7 +107,7 @@ Each codegen module dispatches on `ItemIr` to struct/enum submodules:
 ### Constraints
 
 - Structs and enums only (no unions)
-- Lifetime parameters allowed, but non-`PhantomData` fields that reference item
+- Lifetime parameters allowed, but non-skipped fields that reference item
   lifetimes are rejected at compile time (`validate_no_borrowed_fields`)
 - `#[recallable]` accepts bare type params and arbitrary path types; the macro cannot resolve types,
   so it uses heuristic path matching (e.g. `is_phantom_data` matches any path ending in `PhantomData`)

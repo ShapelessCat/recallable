@@ -154,12 +154,12 @@ Field classification logic:
 
 1. Parse `#[recallable]` and `#[recallable(skip)]` attributes → `FieldBehavior`.
 2. Conflicting `#[recallable]` + `#[recallable(skip)]` on the same field → compile error.
-3. `PhantomData` fields → auto-skipped (regardless of attributes).
+3. `#[recallable(skip)]` fields → `Skip`.
 4. `#[recallable]` on a bare type param `T` → `StoreAsMemento` with the param
    flagged as `RetainedAsRecallable`.
 5. `#[recallable]` on a complex path type like `Option<T>` → `StoreAsMemento`
    with whole-type bounds (no bare-param shorthand).
-6. Everything else → `StoreAsSelf`.
+6. Everything else, including plain `PhantomData<_>`, → `StoreAsSelf`.
 
 `collect_field_irs()` processes all fields and returns both the field IR vec and
 a `GenericUsage` summary (which generic params are retained, which are recallable).
@@ -184,8 +184,8 @@ Key types:
 #### `lifetime.rs` — Borrowed-field rejection
 
 - `collect_item_lifetimes()` — extracts lifetime param idents from generics.
-- `validate_no_borrowed_fields()` — rejects non-`PhantomData`, non-skipped fields
-  that reference struct lifetimes. Uses `LifetimeUsageChecker` (a `syn::Visit` walker).
+- `validate_no_borrowed_fields()` — rejects non-skipped fields that reference
+  struct lifetimes. Uses `LifetimeUsageChecker` (a `syn::Visit` walker).
 - `is_phantom_data()` — heuristic path match: any path ending in `PhantomData`.
 
 #### `bounds.rs` — Trait bound assembly
@@ -278,8 +278,8 @@ but processes variants:
 **Enum restrictions:**
 
 - `ensure_recall_derive_allowed()` — Rejects enums with `#[recallable]` fields or
-  non-`PhantomData` skipped fields. These "complex" enums must implement `Recall`
-  or `TryRecall` manually.
+  skipped fields other than explicitly skipped `PhantomData`. These "complex"
+  enums must implement `Recall` or `TryRecall` manually.
 - `ensure_model_derive_allowed()` — Same restriction for `#[recallable_model]`.
 - `supports_derived_recall()` — Returns whether the restore helper should be generated.
 

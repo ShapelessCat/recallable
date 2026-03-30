@@ -50,6 +50,7 @@ enum SkippedEnum<'a> {
 enum PhantomEnum<'a, T> {
     Idle,
     Value {
+        #[recallable(skip)]
         marker: PhantomData<&'a T>,
         value: T,
     },
