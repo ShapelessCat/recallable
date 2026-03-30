@@ -63,6 +63,11 @@ fn determine_field_behavior(field: &Field) -> syn::Result<Option<FieldBehavior>>
                 if meta.path.is_ident("skip") {
                     saw_skip = true;
                     Ok(())
+                } else if meta.path.is_ident("rename") || meta.path.is_ident("alias") {
+                    // Consumed by the serde_attrs analysis pass; skip the value here.
+                    let _value = meta.value()?;
+                    let _lit: syn::LitStr = _value.parse()?;
+                    Ok(())
                 } else {
                     Err(meta.error("unrecognized `recallable` parameter"))
                 }
