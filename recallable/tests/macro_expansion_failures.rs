@@ -25,5 +25,9 @@ fn derive_macro_reports_expected_failures() {
         tests.compile_fail("tests/ui/model_fail_duplicate_serialize.rs");
         tests.compile_fail("tests/ui/model_fail_duplicate_serialize_qualified.rs");
         tests.compile_fail("tests/ui/model_fail_duplicate_serialize_fully_qualified.rs");
+        tests.compile_fail("tests/ui/derive_fail_serde_rename_conflict.rs");
+        tests.compile_fail("tests/ui/model_fail_manual_serde_rename.rs");
+        tests.compile_fail("tests/ui/model_fail_manual_serde_alias.rs");
+        tests.compile_fail("tests/ui/derive_fail_serde_attr_on_skip.rs");
     }
 }

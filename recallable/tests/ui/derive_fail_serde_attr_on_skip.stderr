@@ -1,0 +1,6 @@
+error: `rename` and `alias` cannot be used on a `#[recallable(skip)]` field
+ --> tests/ui/derive_fail_serde_attr_on_skip.rs:5:5
+  |
+5 | /     #[recallable(skip, rename = "x")]
+6 | |     value: i32,
+  | |______________^

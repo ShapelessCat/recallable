@@ -1,0 +1,5 @@
+error: conflicting `rename` values: `#[serde(rename = "x")]` and `#[recallable(rename = "y")]` must match
+ --> tests/ui/derive_fail_serde_rename_conflict.rs:7:5
+  |
+7 |     value: i32,
+  |     ^^^^^

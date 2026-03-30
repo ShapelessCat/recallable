@@ -1,0 +1,6 @@
+error: `#[recallable_model]` manages serde attributes automatically; use `#[recallable(rename = "...")]` instead of `#[serde(rename = "...")]`
+ --> tests/ui/model_fail_manual_serde_alias.rs:6:5
+  |
+6 | /     #[serde(alias = "old")]
+7 | |     value: i32,
+  | |______________^
