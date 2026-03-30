@@ -41,6 +41,13 @@ impl SerdeFieldAttrs {
     }
 }
 
+/// Unified wrapper for passing serde attrs through the memento codegen dispatch.
+#[derive(Debug)]
+pub(crate) enum SerdeItemAttrs {
+    Struct(SerdeStructAttrs),
+    Enum(SerdeEnumAttrs),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

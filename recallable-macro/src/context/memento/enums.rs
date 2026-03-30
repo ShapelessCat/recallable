@@ -8,12 +8,13 @@ use crate::context::SERDE_ENABLED;
 use crate::context::internal::enums::{
     EnumIr, VariantIr, VariantShape, collect_recall_like_bounds_for_enum,
 };
+use crate::context::internal::serde_attrs::types::{SerdeEnumAttrs, SerdeFieldAttrs};
 use crate::context::internal::shared::{
     CodegenEnv, CodegenItemIr, FieldIr, build_memento_field_tokens,
 };
 
 #[must_use]
-pub(crate) fn gen_memento_enum(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 {
+pub(crate) fn gen_memento_enum(ir: &EnumIr, env: &CodegenEnv, serde_attrs: &SerdeEnumAttrs) -> TokenStream2 {
     let derives = ir.memento_trait_spec().derive_attr();
     let marker_helpers = ir.synthetic_marker_helper_defs();
     let visibility = ir.visibility();
@@ -22,11 +23,13 @@ pub(crate) fn gen_memento_enum(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 {
     let where_clause = build_memento_where_clause(ir, env);
     let variants = ir
         .variants()
-        .map(|variant| {
+        .zip(serde_attrs.variants.iter())
+        .map(|(variant, variant_serde)| {
             build_memento_variant(
                 variant,
                 &env.recallable_trait,
                 ir.generic_type_param_idents(),
+                variant_serde,
             )
         })
         .chain(
@@ -65,11 +68,18 @@ fn build_memento_variant(
     variant: &VariantIr<'_>,
     recallable_trait: &TokenStream2,
     generic_type_params: &HashSet<&Ident>,
+    variant_serde: &[SerdeFieldAttrs],
 ) -> TokenStream2 {
     let name = variant.name;
     let mut fields = variant
         .kept_fields()
-        .map(|(_, field)| build_memento_field(field, recallable_trait, generic_type_params))
+        .map(|(_, field)| {
+            let serde_tokens = field.memento_index
+                .map(|idx| variant_serde[idx].to_memento_tokens())
+                .unwrap_or_default();
+            let field_tokens = build_memento_field(field, recallable_trait, generic_type_params);
+            quote! { #serde_tokens #field_tokens }
+        })
         .peekable();
     let non_empty = fields.peek().is_some();
     match variant.shape {

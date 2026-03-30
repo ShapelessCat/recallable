@@ -106,9 +106,17 @@ pub fn derive_recallable(input: TokenStream) -> TokenStream {
         Ok(ir) => ir,
         Err(e) => return e.to_compile_error().into(),
     };
+    let serde_attrs = if context::SERDE_ENABLED {
+        match context::analyze_serde_attrs(&input, context::MergeMode::Derive) {
+            Ok(attrs) => attrs,
+            Err(e) => return e.to_compile_error().into(),
+        }
+    } else {
+        context::empty_serde_attrs(&input)
+    };
     let env = context::CodegenEnv::resolve();
 
-    let memento_struct = context::gen_memento_type(&ir, &env);
+    let memento_struct = context::gen_memento_type(&ir, &env, &serde_attrs);
     let recallable_impl = context::gen_recallable_impl(&ir, &env);
     let from_impl = context::IMPL_FROM_ENABLED.then_some(context::gen_from_impl(&ir, &env));
 
