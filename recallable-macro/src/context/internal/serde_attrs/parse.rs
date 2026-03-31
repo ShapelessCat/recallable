@@ -1,7 +1,5 @@
 use syn::{Field, LitStr};
 
-use crate::context::SERDE_ENABLED;
-
 const RECALLABLE: &str = "recallable";
 const SERDE: &str = "serde";
 
@@ -22,12 +20,6 @@ pub(crate) fn parse_recallable_serde_attrs(field: &Field) -> syn::Result<RawFiel
                 if meta.path.is_ident("rename") {
                     let value = meta.value()?;
                     let lit: LitStr = value.parse()?;
-                    if !SERDE_ENABLED {
-                        return Err(syn::Error::new_spanned(
-                            &lit,
-                            "`#[recallable(rename = \"...\")]` requires the `serde` feature",
-                        ));
-                    }
                     if result.rename.is_some() {
                         return Err(meta.error("duplicate `rename` in `#[recallable(...)]`"));
                     }
@@ -36,12 +28,6 @@ pub(crate) fn parse_recallable_serde_attrs(field: &Field) -> syn::Result<RawFiel
                 } else if meta.path.is_ident("alias") {
                     let value = meta.value()?;
                     let lit: LitStr = value.parse()?;
-                    if !SERDE_ENABLED {
-                        return Err(syn::Error::new_spanned(
-                            &lit,
-                            "`#[recallable(alias = \"...\")]` requires the `serde` feature",
-                        ));
-                    }
                     result.aliases.push(lit);
                     Ok(())
                 } else {
@@ -83,12 +69,6 @@ pub(crate) fn parse_serde_attrs(field: &Field) -> syn::Result<RawFieldSerdeAttrs
     Ok(result)
 }
 
-/// Returns `true` if the field has `#[serde(rename = ...)]` or `#[serde(alias = ...)]`.
-pub(crate) fn has_serde_rename_or_alias(field: &Field) -> bool {
-    parse_serde_attrs(field)
-        .map(|attrs| attrs.rename.is_some() || !attrs.aliases.is_empty())
-        .unwrap_or(false)
-}
 
 #[cfg(test)]
 mod tests {
@@ -105,7 +85,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "serde")]
     #[test]
     fn recallable_rename_parsed() {
         let field = make_field(quote::quote! {
@@ -117,7 +96,6 @@ mod tests {
         assert!(attrs.aliases.is_empty());
     }
 
-    #[cfg(feature = "serde")]
     #[test]
     fn recallable_alias_parsed() {
         let field = make_field(quote::quote! {
@@ -131,7 +109,6 @@ mod tests {
         assert_eq!(attrs.aliases[1].value(), "legacy");
     }
 
-    #[cfg(feature = "serde")]
     #[test]
     fn recallable_rename_and_alias_combined() {
         let field = make_field(quote::quote! {
