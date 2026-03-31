@@ -203,3 +203,45 @@ pub(crate) struct SchemaDriftRenamedFieldV2 {
     pub(crate) id: u8,
     pub(crate) is_active: bool,
 }
+
+#[allow(dead_code)]
+#[recallable_model]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct RenamedFields {
+    #[recallable(rename = "wire_level")]
+    pub(crate) level: i32,
+    pub(crate) tag: u8,
+}
+
+#[allow(dead_code)]
+#[recallable_model]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct AliasedFields {
+    #[recallable(alias = "old_level", alias = "legacy_level")]
+    pub(crate) level: i32,
+    pub(crate) tag: u8,
+}
+
+#[allow(dead_code)]
+#[recallable_model]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct RenameAndAlias {
+    #[recallable(rename = "wire_level", alias = "old_level")]
+    pub(crate) level: i32,
+    pub(crate) tag: u8,
+}
+
+#[allow(dead_code)]
+#[recallable_model]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum RenamedEnumFields {
+    A {
+        #[recallable(rename = "wire_x")]
+        x: i32,
+        y: u8,
+    },
+    B {
+        #[recallable(alias = "old_z")]
+        z: String,
+    },
+}

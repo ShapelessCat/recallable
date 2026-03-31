@@ -31,6 +31,7 @@ fn expand_tokens(attr: TokenStream2, item: TokenStream2) -> syn::Result<TokenStr
     model_item.add_derives();
     if SERDE_ENABLED {
         model_item.add_serde_skip_attrs();
+        model_item.add_serde_forwarded_attrs();
     }
 
     Ok(model_item.item_tokenstream())
@@ -77,6 +78,22 @@ fn add_serde_skip_attrs_to_fields(fields: &mut Fields) {
         .iter_mut()
         .filter(|field| has_recallable_skip_attr(field))
         .for_each(|field| field.attrs.push(parse_quote! { #[serde(skip)] }));
+}
+
+fn add_serde_forwarded_attrs_to_fields(fields: &mut Fields) {
+    for field in fields.iter_mut() {
+        let Ok(attrs) = context::parse_recallable_serde_attrs(field) else {
+            continue;
+        };
+        if let Some(rename) = &attrs.rename {
+            field
+                .attrs
+                .push(parse_quote! { #[serde(rename = #rename)] });
+        }
+        for alias in &attrs.aliases {
+            field.attrs.push(parse_quote! { #[serde(alias = #alias)] });
+        }
+    }
 }
 
 /// Returns an error if any existing `#[derive(...)]` attribute on the struct
@@ -154,6 +171,10 @@ impl ModelItem {
 
     fn add_serde_skip_attrs(&mut self) {
         self.with_fields_mut(add_serde_skip_attrs_to_fields);
+    }
+
+    fn add_serde_forwarded_attrs(&mut self) {
+        self.with_fields_mut(add_serde_forwarded_attrs_to_fields);
     }
 
     fn item_tokenstream(&self) -> TokenStream2 {
