@@ -80,14 +80,15 @@ fn add_serde_skip_attrs_to_fields(fields: &mut Fields) {
         .for_each(|field| field.attrs.push(parse_quote! { #[serde(skip)] }));
 }
 
-
 fn add_serde_forwarded_attrs_to_fields(fields: &mut Fields) {
     for field in fields.iter_mut() {
         let Ok(attrs) = context::parse_recallable_serde_attrs(field) else {
             continue;
         };
         if let Some(rename) = &attrs.rename {
-            field.attrs.push(parse_quote! { #[serde(rename = #rename)] });
+            field
+                .attrs
+                .push(parse_quote! { #[serde(rename = #rename)] });
         }
         for alias in &attrs.aliases {
             field.attrs.push(parse_quote! { #[serde(alias = #alias)] });

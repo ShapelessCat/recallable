@@ -68,12 +68,9 @@ mod tests {
             rename: Some(lit("x")),
             aliases: vec![],
         };
-        let result = merge_field_attrs(
-            recallable,
-            RawFieldSerdeAttrs::default(),
-            Span::call_site(),
-        )
-        .unwrap();
+        let result =
+            merge_field_attrs(recallable, RawFieldSerdeAttrs::default(), Span::call_site())
+                .unwrap();
         assert_eq!(result.rename.unwrap().value(), "x");
     }
 
@@ -83,12 +80,8 @@ mod tests {
             rename: Some(lit("x")),
             aliases: vec![],
         };
-        let result = merge_field_attrs(
-            RawFieldSerdeAttrs::default(),
-            serde,
-            Span::call_site(),
-        )
-        .unwrap();
+        let result =
+            merge_field_attrs(RawFieldSerdeAttrs::default(), serde, Span::call_site()).unwrap();
         assert_eq!(result.rename.unwrap().value(), "x");
     }
 
@@ -102,12 +95,7 @@ mod tests {
             rename: Some(lit("x")),
             aliases: vec![],
         };
-        let result = merge_field_attrs(
-            recallable,
-            serde,
-            Span::call_site(),
-        )
-        .unwrap();
+        let result = merge_field_attrs(recallable, serde, Span::call_site()).unwrap();
         assert_eq!(result.rename.unwrap().value(), "x");
     }
 
@@ -121,11 +109,7 @@ mod tests {
             rename: Some(lit("y")),
             aliases: vec![],
         };
-        let result = merge_field_attrs(
-            recallable,
-            serde,
-            Span::call_site(),
-        );
+        let result = merge_field_attrs(recallable, serde, Span::call_site());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("conflicting"));
     }
@@ -140,12 +124,7 @@ mod tests {
             rename: None,
             aliases: vec![lit("b"), lit("c")],
         };
-        let result = merge_field_attrs(
-            recallable,
-            serde,
-            Span::call_site(),
-        )
-        .unwrap();
+        let result = merge_field_attrs(recallable, serde, Span::call_site()).unwrap();
         let values: Vec<String> = result.aliases.iter().map(|l| l.value()).collect();
         assert_eq!(values, vec!["a", "b", "c"]);
     }

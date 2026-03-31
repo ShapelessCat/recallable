@@ -69,7 +69,6 @@ pub(crate) fn parse_serde_attrs(field: &Field) -> syn::Result<RawFieldSerdeAttrs
     Ok(result)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

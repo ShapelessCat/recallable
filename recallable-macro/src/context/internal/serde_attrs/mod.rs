@@ -14,9 +14,7 @@ use merge::merge_field_attrs;
 use parse::{parse_recallable_serde_attrs, parse_serde_attrs};
 
 /// Run the serde attribute analysis pass over a struct's fields.
-pub(crate) fn analyze_struct_serde_attrs(
-    fields: &Fields,
-) -> syn::Result<SerdeStructAttrs> {
+pub(crate) fn analyze_struct_serde_attrs(fields: &Fields) -> syn::Result<SerdeStructAttrs> {
     let mut result = Vec::with_capacity(fields.len());
     let mut errors: Option<syn::Error> = None;
 
@@ -25,16 +23,16 @@ pub(crate) fn analyze_struct_serde_attrs(
         let recallable = parse_recallable_serde_attrs(field)?;
         let serde = parse_serde_attrs(field)?;
 
-        let field_span = field.ident.as_ref()
+        let field_span = field
+            .ident
+            .as_ref()
             .map(|i| i.span())
             .unwrap_or_else(|| field.ty.span());
 
         let mut field_ok = true;
 
         // Validation: no-serde feature check
-        if !SERDE_ENABLED
-            && (recallable.rename.is_some() || !recallable.aliases.is_empty())
-        {
+        if !SERDE_ENABLED && (recallable.rename.is_some() || !recallable.aliases.is_empty()) {
             let err = syn::Error::new(
                 field_span,
                 "`rename` and `alias` in `#[recallable(...)]` require the `serde` feature",
@@ -86,9 +84,7 @@ pub(crate) fn analyze_struct_serde_attrs(
 }
 
 /// Run the serde attribute analysis pass over an enum's variants.
-pub(crate) fn analyze_enum_serde_attrs(
-    data: &syn::DataEnum,
-) -> syn::Result<SerdeEnumAttrs> {
+pub(crate) fn analyze_enum_serde_attrs(data: &syn::DataEnum) -> syn::Result<SerdeEnumAttrs> {
     let mut variants = Vec::with_capacity(data.variants.len());
     let mut errors: Option<syn::Error> = None;
 
@@ -98,15 +94,15 @@ pub(crate) fn analyze_enum_serde_attrs(
             let recallable = parse_recallable_serde_attrs(field)?;
             let serde = parse_serde_attrs(field)?;
 
-            let field_span = field.ident.as_ref()
+            let field_span = field
+                .ident
+                .as_ref()
                 .map(|i| i.span())
                 .unwrap_or_else(|| field.ty.span());
 
             let mut field_ok = true;
 
-            if !SERDE_ENABLED
-                && (recallable.rename.is_some() || !recallable.aliases.is_empty())
-            {
+            if !SERDE_ENABLED && (recallable.rename.is_some() || !recallable.aliases.is_empty()) {
                 let err = syn::Error::new(
                     field_span,
                     "`rename` and `alias` in `#[recallable(...)]` require the `serde` feature",
@@ -160,7 +156,7 @@ pub(crate) fn analyze_enum_serde_attrs(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use syn::{parse_quote, Fields};
+    use syn::{Fields, parse_quote};
 
     fn struct_fields(input: &syn::ItemStruct) -> &Fields {
         &input.fields
@@ -180,10 +176,18 @@ mod tests {
         let err = analyze_struct_serde_attrs(struct_fields(&input)).unwrap_err();
         let msg = err.to_string();
         // Both fields should be reported
-        assert!(msg.contains("serde"), "expected serde feature error, got: {msg}");
+        assert!(
+            msg.contains("serde"),
+            "expected serde feature error, got: {msg}"
+        );
         // syn::Error with combine produces multiple error messages joined
         let errors: Vec<_> = err.into_iter().collect();
-        assert_eq!(errors.len(), 2, "expected 2 accumulated errors, got {}", errors.len());
+        assert_eq!(
+            errors.len(),
+            2,
+            "expected 2 accumulated errors, got {}",
+            errors.len()
+        );
     }
 
     #[cfg(feature = "serde")]
@@ -199,6 +203,11 @@ mod tests {
         };
         let err = analyze_struct_serde_attrs(struct_fields(&input)).unwrap_err();
         let errors: Vec<_> = err.into_iter().collect();
-        assert_eq!(errors.len(), 2, "expected 2 accumulated errors, got {}", errors.len());
+        assert_eq!(
+            errors.len(),
+            2,
+            "expected 2 accumulated errors, got {}",
+            errors.len()
+        );
     }
 }

@@ -20,8 +20,8 @@ use syn::DeriveInput;
 use self::internal::shared::ItemIr;
 
 pub(super) use from_impl::gen_from_impl;
-pub(super) use internal::shared::{CodegenEnv, crate_path, has_recallable_skip_attr};
 pub(super) use internal::serde_attrs::parse::parse_recallable_serde_attrs;
+pub(super) use internal::shared::{CodegenEnv, crate_path, has_recallable_skip_attr};
 pub(super) use recall_impl::gen_recall_impl;
 pub(super) use recallable_impl::gen_recallable_impl;
 
@@ -83,7 +83,9 @@ mod tests {
     use syn::parse_quote;
 
     use super::{CodegenEnv, analyze_item, analyze_recall_input, gen_memento_type};
-    use crate::context::internal::serde_attrs::types::{SerdeFieldAttrs, SerdeItemAttrs, SerdeStructAttrs};
+    use crate::context::internal::serde_attrs::types::{
+        SerdeFieldAttrs, SerdeItemAttrs, SerdeStructAttrs,
+    };
 
     #[test]
     fn split_internal_reexports_cover_both_item_kinds() {
@@ -111,11 +113,17 @@ mod tests {
 
         assert_eq!(struct_ir.memento_name().to_string(), "ExampleMemento");
         assert_eq!(enum_ir.memento_name().to_string(), "ChoiceMemento");
-        let serde_attrs = SerdeItemAttrs::Struct(SerdeStructAttrs { fields: vec![SerdeFieldAttrs::default()] });
+        let serde_attrs = SerdeItemAttrs::Struct(SerdeStructAttrs {
+            fields: vec![SerdeFieldAttrs::default()],
+        });
         assert!(
-            crate::context::memento::gen_memento_type(&ItemIr::Struct(struct_ir), &env, &serde_attrs)
-                .to_string()
-                .contains("ExampleMemento")
+            crate::context::memento::gen_memento_type(
+                &ItemIr::Struct(struct_ir),
+                &env,
+                &serde_attrs
+            )
+            .to_string()
+            .contains("ExampleMemento")
         );
     }
 
@@ -147,8 +155,11 @@ mod tests {
 
         let ir = analyze_item(&input).unwrap();
         let env = CodegenEnv::resolve();
-        let serde_attrs = SerdeItemAttrs::Struct(SerdeStructAttrs { fields: vec![SerdeFieldAttrs::default()] });
-        let memento: syn::ItemStruct = syn::parse2(gen_memento_type(&ir, &env, &serde_attrs)).unwrap();
+        let serde_attrs = SerdeItemAttrs::Struct(SerdeStructAttrs {
+            fields: vec![SerdeFieldAttrs::default()],
+        });
+        let memento: syn::ItemStruct =
+            syn::parse2(gen_memento_type(&ir, &env, &serde_attrs)).unwrap();
 
         assert_eq!(memento.ident.to_string(), "ExampleMemento");
         assert_eq!(memento.vis.to_token_stream().to_string(), "pub (crate)");

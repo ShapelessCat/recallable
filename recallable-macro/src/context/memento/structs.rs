@@ -11,7 +11,11 @@ use crate::context::internal::shared::{
 use crate::context::internal::structs::{StructIr, StructShape, collect_recall_like_bounds};
 
 #[must_use]
-pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv, serde_attrs: &SerdeStructAttrs) -> TokenStream2 {
+pub(crate) fn gen_memento_struct(
+    ir: &StructIr,
+    env: &CodegenEnv,
+    serde_attrs: &SerdeStructAttrs,
+) -> TokenStream2 {
     let derives = ir.memento_trait_spec().derive_attr();
     let marker_helpers = ir.synthetic_marker_helper_defs();
     let visibility = ir.visibility();
@@ -29,7 +33,11 @@ pub(crate) fn gen_memento_struct(ir: &StructIr, env: &CodegenEnv, serde_attrs: &
     }
 }
 
-fn build_memento_body(ir: &StructIr, env: &CodegenEnv, serde_attrs: &SerdeStructAttrs) -> TokenStream2 {
+fn build_memento_body(
+    ir: &StructIr,
+    env: &CodegenEnv,
+    serde_attrs: &SerdeStructAttrs,
+) -> TokenStream2 {
     let shape = ir.generated_memento_shape();
     let where_clause = build_memento_where_clause(ir, env);
     let fields = memento_fields_with_marker(ir, env, shape, serde_attrs);
@@ -70,10 +78,12 @@ fn memento_fields_with_marker<'ir, 'input>(
 
     ir.memento_fields()
         .map(|field| {
-            let serde_tokens = field.memento_index
+            let serde_tokens = field
+                .memento_index
                 .map(|idx| serde_attrs.fields[idx].to_memento_tokens())
                 .unwrap_or_default();
-            let field_tokens = build_memento_field(field, recallable_trait, ir.generic_type_param_idents());
+            let field_tokens =
+                build_memento_field(field, recallable_trait, ir.generic_type_param_idents());
             quote! { #serde_tokens #field_tokens }
         })
         .chain(
@@ -128,7 +138,9 @@ mod tests {
             }
         };
         let restricted_ir = StructIr::analyze(&restricted_input).unwrap();
-        let serde = SerdeStructAttrs { fields: vec![SerdeFieldAttrs::default()] };
+        let serde = SerdeStructAttrs {
+            fields: vec![SerdeFieldAttrs::default()],
+        };
         let restricted_memento: syn::ItemStruct =
             syn::parse2(gen_memento_struct(&restricted_ir, &env, &serde)).unwrap();
         assert_eq!(
@@ -142,7 +154,9 @@ mod tests {
             }
         };
         let private_ir = StructIr::analyze(&private_input).unwrap();
-        let serde = SerdeStructAttrs { fields: vec![SerdeFieldAttrs::default()] };
+        let serde = SerdeStructAttrs {
+            fields: vec![SerdeFieldAttrs::default()],
+        };
         let private_memento: syn::ItemStruct =
             syn::parse2(gen_memento_struct(&private_ir, &env, &serde)).unwrap();
         assert!(matches!(private_memento.vis, syn::Visibility::Inherited));

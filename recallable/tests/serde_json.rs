@@ -268,8 +268,7 @@ fn test_rename_field_round_trip() {
     assert!(!json.contains("\"level\""));
 
     // Deserialize into memento using the wire name
-    let memento: <RenamedFields as Recallable>::Memento =
-        serde_json::from_str(&json).unwrap();
+    let memento: <RenamedFields as Recallable>::Memento = serde_json::from_str(&json).unwrap();
 
     let mut target = RenamedFields { level: 0, tag: 0 };
     target.recall(memento);
@@ -281,8 +280,7 @@ fn test_rename_field_round_trip() {
 fn test_alias_field_deserialization() {
     // Deserialize using the alias key name
     let json = r#"{"old_level": 99, "tag": 3}"#;
-    let memento: <AliasedFields as Recallable>::Memento =
-        serde_json::from_str(json).unwrap();
+    let memento: <AliasedFields as Recallable>::Memento = serde_json::from_str(json).unwrap();
 
     let mut target = AliasedFields { level: 0, tag: 0 };
     target.recall(memento);
@@ -291,8 +289,7 @@ fn test_alias_field_deserialization() {
 
     // Also works with the other alias
     let json2 = r#"{"legacy_level": 77, "tag": 5}"#;
-    let memento2: <AliasedFields as Recallable>::Memento =
-        serde_json::from_str(json2).unwrap();
+    let memento2: <AliasedFields as Recallable>::Memento = serde_json::from_str(json2).unwrap();
 
     let mut target2 = AliasedFields { level: 0, tag: 0 };
     target2.recall(memento2);
@@ -301,8 +298,7 @@ fn test_alias_field_deserialization() {
 
     // And with the original field name
     let json3 = r#"{"level": 55, "tag": 1}"#;
-    let memento3: <AliasedFields as Recallable>::Memento =
-        serde_json::from_str(json3).unwrap();
+    let memento3: <AliasedFields as Recallable>::Memento = serde_json::from_str(json3).unwrap();
 
     let mut target3 = AliasedFields { level: 0, tag: 0 };
     target3.recall(memento3);
@@ -318,8 +314,7 @@ fn test_rename_and_alias_combined() {
     assert!(json.contains("wire_level"));
 
     // Deserialize with the renamed key
-    let memento: <RenameAndAlias as Recallable>::Memento =
-        serde_json::from_str(&json).unwrap();
+    let memento: <RenameAndAlias as Recallable>::Memento = serde_json::from_str(&json).unwrap();
     let mut target = RenameAndAlias { level: 0, tag: 0 };
     target.recall(memento);
     assert_eq!(target.level, 10);
@@ -342,8 +337,7 @@ fn test_enum_variant_rename_round_trip() {
     assert!(json.contains("wire_x"));
 
     // Deserialize into memento
-    let memento: <RenamedEnumFields as Recallable>::Memento =
-        serde_json::from_str(&json).unwrap();
+    let memento: <RenamedEnumFields as Recallable>::Memento = serde_json::from_str(&json).unwrap();
 
     let mut target = RenamedEnumFields::A { x: 0, y: 0 };
     target.recall(memento);
@@ -353,8 +347,7 @@ fn test_enum_variant_rename_round_trip() {
 #[test]
 fn test_enum_variant_alias_deserialization() {
     let json = r#"{"B":{"old_z":"hello"}}"#;
-    let memento: <RenamedEnumFields as Recallable>::Memento =
-        serde_json::from_str(json).unwrap();
+    let memento: <RenamedEnumFields as Recallable>::Memento = serde_json::from_str(json).unwrap();
 
     let mut target = RenamedEnumFields::B { z: String::new() };
     target.recall(memento);

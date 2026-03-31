@@ -14,7 +14,11 @@ use crate::context::internal::shared::{
 };
 
 #[must_use]
-pub(crate) fn gen_memento_enum(ir: &EnumIr, env: &CodegenEnv, serde_attrs: &SerdeEnumAttrs) -> TokenStream2 {
+pub(crate) fn gen_memento_enum(
+    ir: &EnumIr,
+    env: &CodegenEnv,
+    serde_attrs: &SerdeEnumAttrs,
+) -> TokenStream2 {
     let derives = ir.memento_trait_spec().derive_attr();
     let marker_helpers = ir.synthetic_marker_helper_defs();
     let visibility = ir.visibility();
@@ -74,7 +78,8 @@ fn build_memento_variant(
     let mut fields = variant
         .kept_fields()
         .map(|(_, field)| {
-            let serde_tokens = field.memento_index
+            let serde_tokens = field
+                .memento_index
                 .map(|idx| variant_serde[idx].to_memento_tokens())
                 .unwrap_or_default();
             let field_tokens = build_memento_field(field, recallable_trait, generic_type_params);
