@@ -106,13 +106,9 @@ pub fn derive_recallable(input: TokenStream) -> TokenStream {
         Ok(ir) => ir,
         Err(e) => return e.to_compile_error().into(),
     };
-    let serde_attrs = if context::SERDE_ENABLED {
-        match context::analyze_serde_attrs(&input, context::MergeMode::Derive) {
-            Ok(attrs) => attrs,
-            Err(e) => return e.to_compile_error().into(),
-        }
-    } else {
-        context::empty_serde_attrs(&input)
+    let serde_attrs = match context::analyze_serde_attrs(&input) {
+        Ok(attrs) => attrs,
+        Err(e) => return e.to_compile_error().into(),
     };
     let env = context::CodegenEnv::resolve();
 

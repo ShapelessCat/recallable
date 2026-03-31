@@ -21,8 +21,7 @@ use self::internal::shared::ItemIr;
 
 pub(super) use from_impl::gen_from_impl;
 pub(super) use internal::shared::{CodegenEnv, crate_path, has_recallable_skip_attr};
-pub(super) use internal::serde_attrs::MergeMode;
-pub(super) use internal::serde_attrs::parse::{has_serde_rename_or_alias, parse_recallable_serde_attrs};
+pub(super) use internal::serde_attrs::parse::parse_recallable_serde_attrs;
 pub(super) use recall_impl::gen_recall_impl;
 pub(super) use recallable_impl::gen_recallable_impl;
 
@@ -63,35 +62,17 @@ pub(crate) fn gen_memento_type(
 
 pub(super) fn analyze_serde_attrs(
     input: &DeriveInput,
-    mode: internal::serde_attrs::MergeMode,
 ) -> syn::Result<internal::serde_attrs::types::SerdeItemAttrs> {
     use internal::serde_attrs::types::SerdeItemAttrs;
     match &input.data {
         syn::Data::Struct(data) => {
-            let attrs = internal::serde_attrs::analyze_struct_serde_attrs(&data.fields, mode)?;
+            let attrs = internal::serde_attrs::analyze_struct_serde_attrs(&data.fields)?;
             Ok(SerdeItemAttrs::Struct(attrs))
         }
         syn::Data::Enum(data) => {
-            let attrs = internal::serde_attrs::analyze_enum_serde_attrs(data, mode)?;
+            let attrs = internal::serde_attrs::analyze_enum_serde_attrs(data)?;
             Ok(SerdeItemAttrs::Enum(attrs))
         }
-        _ => unreachable!("unions rejected earlier"),
-    }
-}
-
-pub(super) fn empty_serde_attrs(
-    input: &DeriveInput,
-) -> internal::serde_attrs::types::SerdeItemAttrs {
-    use internal::serde_attrs::types::*;
-    match &input.data {
-        syn::Data::Struct(data) => SerdeItemAttrs::Struct(SerdeStructAttrs {
-            fields: data.fields.iter().map(|_| SerdeFieldAttrs::default()).collect(),
-        }),
-        syn::Data::Enum(data) => SerdeItemAttrs::Enum(SerdeEnumAttrs {
-            variants: data.variants.iter().map(|v| {
-                v.fields.iter().map(|_| SerdeFieldAttrs::default()).collect()
-            }).collect(),
-        }),
         _ => unreachable!("unions rejected earlier"),
     }
 }
