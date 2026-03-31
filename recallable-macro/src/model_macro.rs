@@ -26,7 +26,6 @@ fn expand_tokens(attr: TokenStream2, item: TokenStream2) -> syn::Result<TokenStr
     context::analyze_model_input(&derive_input)?;
     if SERDE_ENABLED {
         check_no_serialize_derive(model_item.attrs())?;
-        model_item.check_no_serde_rename_or_alias()?;
     }
 
     model_item.add_derives();
@@ -81,18 +80,6 @@ fn add_serde_skip_attrs_to_fields(fields: &mut Fields) {
         .for_each(|field| field.attrs.push(parse_quote! { #[serde(skip)] }));
 }
 
-fn check_no_serde_rename_or_alias_on_fields(fields: &Fields) -> syn::Result<()> {
-    for field in fields.iter() {
-        if context::has_serde_rename_or_alias(field) {
-            return Err(syn::Error::new_spanned(
-                field,
-                "`#[recallable_model]` manages serde attributes automatically; \
-                 use `#[recallable(rename = \"...\")]` instead of `#[serde(rename = \"...\")]`",
-            ));
-        }
-    }
-    Ok(())
-}
 
 fn add_serde_forwarded_attrs_to_fields(fields: &mut Fields) {
     for field in fields.iter_mut() {
@@ -183,18 +170,6 @@ impl ModelItem {
 
     fn add_serde_skip_attrs(&mut self) {
         self.with_fields_mut(add_serde_skip_attrs_to_fields);
-    }
-
-    fn check_no_serde_rename_or_alias(&self) -> syn::Result<()> {
-        match self {
-            Self::Struct(item) => check_no_serde_rename_or_alias_on_fields(&item.fields),
-            Self::Enum(item) => {
-                for variant in &item.variants {
-                    check_no_serde_rename_or_alias_on_fields(&variant.fields)?;
-                }
-                Ok(())
-            }
-        }
     }
 
     fn add_serde_forwarded_attrs(&mut self) {
