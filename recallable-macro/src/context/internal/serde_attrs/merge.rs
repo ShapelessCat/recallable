@@ -1,41 +1,13 @@
 use super::parse::RawFieldSerdeAttrs;
 use super::types::SerdeFieldAttrs;
 
-/// Merge mode controls whether `#[serde(...)]` attrs are accepted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum MergeMode {
-    /// `#[derive(Recallable)]` — both sources accepted, conflicts rejected.
-    Derive,
-    /// `#[recallable_model]` — only `#[recallable(...)]` accepted.
-    Model,
-}
-
 /// Merge `#[recallable(...)]` and `#[serde(...)]` attrs for a single field.
 /// Returns the merged `SerdeFieldAttrs` or a compile error on conflict.
 pub(crate) fn merge_field_attrs(
     recallable: RawFieldSerdeAttrs,
     serde: RawFieldSerdeAttrs,
-    mode: MergeMode,
     field_span: proc_macro2::Span,
 ) -> syn::Result<SerdeFieldAttrs> {
-    // In Model mode, reject any #[serde(rename/alias)]
-    if mode == MergeMode::Model {
-        if serde.rename.is_some() {
-            return Err(syn::Error::new(
-                field_span,
-                "`#[recallable_model]` manages serde attributes automatically; \
-                 use `#[recallable(rename = \"...\")]` instead of `#[serde(rename = \"...\")]`",
-            ));
-        }
-        if !serde.aliases.is_empty() {
-            return Err(syn::Error::new(
-                field_span,
-                "`#[recallable_model]` manages serde attributes automatically; \
-                 use `#[recallable(alias = \"...\")]` instead of `#[serde(alias = \"...\")]`",
-            ));
-        }
-    }
-
     // Merge rename
     let rename = match (recallable.rename, serde.rename) {
         (Some(r), Some(s)) => {
@@ -84,7 +56,6 @@ mod tests {
         let result = merge_field_attrs(
             RawFieldSerdeAttrs::default(),
             RawFieldSerdeAttrs::default(),
-            MergeMode::Derive,
             Span::call_site(),
         )
         .unwrap();
@@ -100,7 +71,6 @@ mod tests {
         let result = merge_field_attrs(
             recallable,
             RawFieldSerdeAttrs::default(),
-            MergeMode::Derive,
             Span::call_site(),
         )
         .unwrap();
@@ -116,45 +86,10 @@ mod tests {
         let result = merge_field_attrs(
             RawFieldSerdeAttrs::default(),
             serde,
-            MergeMode::Derive,
             Span::call_site(),
         )
         .unwrap();
         assert_eq!(result.rename.unwrap().value(), "x");
-    }
-
-    #[test]
-    fn serde_rename_rejected_in_model_mode() {
-        let serde = RawFieldSerdeAttrs {
-            rename: Some(lit("x")),
-            aliases: vec![],
-        };
-        let result = merge_field_attrs(
-            RawFieldSerdeAttrs::default(),
-            serde,
-            MergeMode::Model,
-            Span::call_site(),
-        );
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("#[recallable_model]"));
-    }
-
-    #[test]
-    fn serde_alias_rejected_in_model_mode() {
-        let serde = RawFieldSerdeAttrs {
-            rename: None,
-            aliases: vec![lit("old")],
-        };
-        let result = merge_field_attrs(
-            RawFieldSerdeAttrs::default(),
-            serde,
-            MergeMode::Model,
-            Span::call_site(),
-        );
-        assert!(result.is_err());
     }
 
     #[test]
@@ -170,7 +105,6 @@ mod tests {
         let result = merge_field_attrs(
             recallable,
             serde,
-            MergeMode::Derive,
             Span::call_site(),
         )
         .unwrap();
@@ -190,7 +124,6 @@ mod tests {
         let result = merge_field_attrs(
             recallable,
             serde,
-            MergeMode::Derive,
             Span::call_site(),
         );
         assert!(result.is_err());
@@ -210,7 +143,6 @@ mod tests {
         let result = merge_field_attrs(
             recallable,
             serde,
-            MergeMode::Derive,
             Span::call_site(),
         )
         .unwrap();
