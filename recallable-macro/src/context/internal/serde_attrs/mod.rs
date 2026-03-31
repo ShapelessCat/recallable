@@ -156,3 +156,49 @@ pub(crate) fn analyze_enum_serde_attrs(
         Ok(SerdeEnumAttrs { variants })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syn::{parse_quote, Fields};
+
+    fn struct_fields(input: &syn::ItemStruct) -> &Fields {
+        &input.fields
+    }
+
+    #[cfg(not(feature = "serde"))]
+    #[test]
+    fn accumulates_no_serde_errors_across_fields() {
+        let input: syn::ItemStruct = parse_quote! {
+            struct Example {
+                #[recallable(rename = "a")]
+                first: i32,
+                #[recallable(alias = "b")]
+                second: i32,
+            }
+        };
+        let err = analyze_struct_serde_attrs(struct_fields(&input)).unwrap_err();
+        let msg = err.to_string();
+        // Both fields should be reported
+        assert!(msg.contains("serde"), "expected serde feature error, got: {msg}");
+        // syn::Error with combine produces multiple error messages joined
+        let errors: Vec<_> = err.into_iter().collect();
+        assert_eq!(errors.len(), 2, "expected 2 accumulated errors, got {}", errors.len());
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn accumulates_skip_rename_errors_across_fields() {
+        let input: syn::ItemStruct = parse_quote! {
+            struct Example {
+                #[recallable(skip, rename = "a")]
+                first: i32,
+                #[recallable(skip, alias = "b")]
+                second: i32,
+            }
+        };
+        let err = analyze_struct_serde_attrs(struct_fields(&input)).unwrap_err();
+        let errors: Vec<_> = err.into_iter().collect();
+        assert_eq!(errors.len(), 2, "expected 2 accumulated errors, got {}", errors.len());
+    }
+}
