@@ -2,6 +2,8 @@
 .vscode/
 .worktrees/
 
+docs/superpowers/
+
 .claude/
 
 target/
