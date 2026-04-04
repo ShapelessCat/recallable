@@ -20,7 +20,7 @@ use syn::DeriveInput;
 use self::internal::shared::ItemIr;
 
 pub(super) use from_impl::gen_from_impl;
-pub(super) use internal::shared::{CodegenEnv, crate_path, has_recallable_skip_attr};
+pub(super) use internal::shared::{CodegenEnv, crate_path};
 pub(super) use recall_impl::gen_recall_impl;
 pub(super) use recallable_impl::gen_recallable_impl;
 
