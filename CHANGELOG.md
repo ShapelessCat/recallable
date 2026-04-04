@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `impl_from` codegen for enums and structs with unit variants
 
+- `#[recallable_model]` now mirrors `#[cfg_attr(..., recallable(skip))]` as
+  `#[cfg_attr(..., serde(skip))]` and rejects conflicting `recallable` +
+  `serde(skip)` combinations under the same `cfg_attr`
+
 ## [0.2.0] - 2026-03-27
 
 ### Added
