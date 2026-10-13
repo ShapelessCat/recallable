@@ -1,4 +1,5 @@
 #![cfg(feature = "serde")]
+#![deny(clippy::redundant_field_names)]
 
 use recallable::{Recall, Recallable, recallable_model};
 

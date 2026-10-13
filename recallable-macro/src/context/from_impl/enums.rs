@@ -5,7 +5,9 @@ use syn::WherePredicate;
 use crate::context::internal::enums::{
     EnumIr, VariantIr, VariantShape, build_binding_ident, collect_shared_memento_bounds_for_enum,
 };
-use crate::context::internal::shared::{CodegenEnv, CodegenItemIr, FieldIr, build_from_value_expr};
+use crate::context::internal::shared::{
+    CodegenEnv, CodegenItemIr, FieldIr, FieldStrategy, build_from_value_expr,
+};
 
 #[must_use]
 pub(crate) fn gen_enum_from_impl(ir: &EnumIr, env: &CodegenEnv) -> TokenStream2 {
@@ -92,9 +94,13 @@ fn build_variant_from_expr(variant: &VariantIr<'_>) -> Option<TokenStream2> {
         VariantShape::Named if non_empty => {
             let inits = kept_fields.map(|(index, field)| {
                 let member = &field.member;
-                let binding = build_binding_ident(field, index);
-                let value = build_from_binding_expr(field, &binding);
-                quote! { #member: #value }
+                if field.strategy == FieldStrategy::StoreAsSelf {
+                    quote! { #member }
+                } else {
+                    let binding = build_binding_ident(field, index);
+                    let value = build_from_binding_expr(field, &binding);
+                    quote! { #member: #value }
+                }
             });
             Some(quote! { { #(#inits),* } })
         }

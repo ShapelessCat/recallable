@@ -91,8 +91,12 @@ fn build_variant_restore_expr(variant: &VariantIr<'_>, enum_name: &syn::Ident) -
         VariantShape::Named => {
             let inits = variant.indexed_fields().map(|(index, field)| {
                 let member = &field.member;
-                let value = build_variant_restore_value(field, index);
-                quote! { #member: #value }
+                if field.strategy == FieldStrategy::StoreAsSelf {
+                    quote! { #member }
+                } else {
+                    let value = build_variant_restore_value(field, index);
+                    quote! { #member: #value }
+                }
             });
             quote! { #enum_name::#variant_name { #(#inits),* } }
         }
