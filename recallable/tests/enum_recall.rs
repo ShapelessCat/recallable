@@ -1,4 +1,5 @@
 #![deny(dead_code)]
+#![deny(clippy::redundant_field_names)]
 
 use core::marker::PhantomData;
 

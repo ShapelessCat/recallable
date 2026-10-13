@@ -1,3 +1,5 @@
+#![deny(clippy::redundant_field_names)]
+
 use core::marker::PhantomData;
 use std::any::TypeId;
 
